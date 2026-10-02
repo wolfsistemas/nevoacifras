@@ -68,8 +68,8 @@ export default function SharedList() {
           >
             <span className="setlist-index">{idx + 1}</span>
             <span className="list-card-body grow">
-              <strong className="song-card-title">{item.song.title}</strong>
-              <span className="song-card-artist">{item.song.artist}</span>
+              <strong className="song-card-title">{item.song?.title}</strong>
+              <span className="song-card-artist">{item.song?.artist}</span>
               {item.shift || item.capo ? (
                 <span className="muted small">
                   {item.shift ? `Tom ${item.shift > 0 ? `+${item.shift}` : item.shift}` : ''}

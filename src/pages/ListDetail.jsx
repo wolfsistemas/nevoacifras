@@ -219,15 +219,15 @@ export default function ListDetail() {
             <span className="setlist-index">{idx + 1}</span>
             <button type="button" className="song-card grow" onClick={() => item.song?.id && setOpenSongId(item.song.id)}>
               <div className="song-card-art small">
-                {item.song.image_url ? (
+                {item.song?.image_url ? (
                   <img src={item.song.image_url} alt="" loading="lazy" />
                 ) : (
-                  <span className="song-card-art-letter">{(item.song.artist || '?')[0]?.toUpperCase()}</span>
+                  <span className="song-card-art-letter">{(item.song?.artist || '?')[0]?.toUpperCase()}</span>
                 )}
               </div>
               <div className="song-card-body">
-                <strong className="song-card-title">{item.song.title}</strong>
-                <span className="song-card-artist">{item.song.artist}</span>
+                <strong className="song-card-title">{item.song?.title}</strong>
+                <span className="song-card-artist">{item.song?.artist}</span>
                 {(item.shift || item.capo) ? (
                   <span className="muted small">
                     {item.shift ? `Tom ${item.shift > 0 ? `+${item.shift}` : item.shift}` : ''}

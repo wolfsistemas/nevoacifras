@@ -337,12 +337,15 @@ export async function getSharedList(token, toneScope) {
   const { id: _listId, ...meta } = list
   return {
     ...meta,
-    items: (data || []).map((it) => {
-      const local = it.song?.id ? tones[it.song.id] : null
-      const shift = local ? Number(local.shift) || 0 : it.shift != null ? Number(it.shift) || 0 : 0
-      const capo = local ? Number(local.capo) || 0 : it.capo != null ? Number(it.capo) || 0 : 0
-      return { ...it, shift, capo }
-    })
+    items: (data || [])
+      .map((it) => {
+        const song = it.songs
+        const local = song?.id ? tones[song.id] : null
+        const shift = local ? Number(local.shift) || 0 : it.shift != null ? Number(it.shift) || 0 : 0
+        const capo = local ? Number(local.capo) || 0 : it.capo != null ? Number(it.capo) || 0 : 0
+        return { ...it, song, shift, capo }
+      })
+      .filter((it) => it.song)
   }
 }
 
