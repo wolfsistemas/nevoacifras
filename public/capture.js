@@ -306,11 +306,20 @@
     'biografia', 'letras', 'cifras', 'musicas', 'traducoes', 'notas', 'versoes',
     'partituras', 'tabs-baixo'
   ])
+  // Rotas de primeiro nível que nunca são páginas de artista.
+  const RESERVED_ROUTES = new Set([
+    'explorar', 'busca', 'mais-acessadas', 'estilos', 'blog', 'academy', 'forum',
+    'pro', 'letras', 'cifras', 'musico', 'top', 'cursos', 'partituras', 'tabs',
+    'videoaulas', 'aulas', 'noticias', 'encontre', 'escolas', 'app', 'apps', 'login'
+  ])
   function onCifraclub() {
     return SITE_HOSTS.includes(location.hostname)
   }
   function hasSongContent() {
     return !!document.querySelector('pre[data-chord-content="true"]')
+  }
+  function hasArtistMarker() {
+    return !!document.querySelector('#js-artistName, #js-a-songs, h1.art-header, ul.artistMusics--allSongs, #js-a-t-more')
   }
   function artistSlugNow() {
     return location.pathname.split('/').filter(Boolean)[0] || ''
@@ -340,7 +349,8 @@
   function isListingPage() {
     if (!onCifraclub() || hasSongContent()) return false
     const slug = artistSlugNow()
-    if (!slug) return false
+    if (!slug || RESERVED_ROUTES.has(slug)) return false
+    if (!hasArtistMarker()) return false
     return collectLinksFrom(document, slug, new Set()).length > 0
   }
   function collectArtistLinks() {
@@ -402,7 +412,7 @@
       console.warn('Névoa: esta é uma página de música. Use nevoa.capture().')
       return
     }
-    if (!onCifraclub() || !artistSlugNow()) {
+    if (!onCifraclub() || !artistSlugNow() || RESERVED_ROUTES.has(artistSlugNow())) {
       console.warn('Névoa: abra a página do artista/álbum no Cifra Club (ex.: cifraclub.com.br/nome-do-artista/) e rode de novo.')
       return
     }
@@ -490,7 +500,11 @@
   if (isListingPage()) {
     console.log('Página de artista/álbum detectada — capturando todas as músicas listadas...')
     artist(false)
-  } else {
+  } else if (hasSongContent()) {
     capture()
+  } else if (onCifraclub()) {
+    console.warn('Névoa: esta página não é uma cifra nem a página de um artista. Nada para capturar aqui.')
+  } else {
+    console.warn('Névoa: abra uma página do Cifra Club (a cifra ou o artista) e rode de novo.')
   }
 })()
