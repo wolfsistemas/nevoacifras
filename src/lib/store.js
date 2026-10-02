@@ -538,6 +538,71 @@ export async function moveListSong(listSongId, dir) {
   if (error) throw error
 }
 
+// ------------------------- Recados da lista (chat) -------------------------
+
+const messagesKey = (token) => `nevoa_msgs_${token}`
+
+function readMessagesCache(token) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(messagesKey(token)) || '[]')
+    return Array.isArray(raw) ? raw : []
+  } catch {
+    return []
+  }
+}
+
+function saveMessagesCache(token, rows) {
+  try {
+    localStorage.setItem(messagesKey(token), JSON.stringify(rows.slice(-120)))
+  } catch {}
+}
+
+// Lê os recados do link compartilhado. Cai no cache local quando offline.
+export async function listMessages(token) {
+  if (!token) return []
+  try {
+    const { data, error } = await supabase
+      .from('list_messages')
+      .select('*')
+      .eq('share_token', token)
+      .order('created_at', { ascending: true })
+      .limit(200)
+    if (error) throw error
+    saveMessagesCache(token, data || [])
+    return data || []
+  } catch (e) {
+    const cached = readMessagesCache(token)
+    if (cached.length) return cached
+    throw e
+  }
+}
+
+export async function sendListMessage({ token, body, songId, username }) {
+  const text = String(body || '').trim()
+  if (!token) throw new Error('A lista precisa de um link de compartilhamento.')
+  if (!text) throw new Error('Escreva um recado.')
+  const uid = await currentUserId()
+  if (!uid) throw new Error('Entre para enviar recados.')
+  const { data, error } = await supabase
+    .from('list_messages')
+    .insert({
+      share_token: token,
+      user_id: uid,
+      username: String(username || 'Membro').slice(0, 40),
+      body: text.slice(0, 2000),
+      song_id: songId || null
+    })
+    .select('*')
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteListMessage(id) {
+  const { error } = await supabase.from('list_messages').delete().eq('id', id)
+  if (error) throw error
+}
+
 // ------------------------- Favoritos -------------------------
 
 export async function getFavorites() {

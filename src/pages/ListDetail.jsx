@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Icon } from '../components/Icons'
 import SongCard from '../components/SongCard'
+import ListChat from '../components/ListChat'
 import { SongView } from './Song'
 import { callFetchSong } from '../lib/supabase'
 import { searchRemoteSongs, mergeHits, resolveCifraHit } from '../lib/musicSearch'
@@ -173,6 +174,7 @@ export default function ListDetail() {
 
   const items = list.items || []
   const readOnly = !!list.is_readonly
+  const chatToken = list.share_token || list.shared_from_token || null
 
   return (
     <div className="page">
@@ -270,6 +272,22 @@ export default function ListDetail() {
           </div>
         ))}
       </div>
+
+      {chatToken ? (
+        <ListChat token={chatToken} items={items} onOpenSong={setOpenSongId} />
+      ) : !readOnly ? (
+        <section className="chat">
+          <button
+            type="button"
+            className="chat-head"
+            onClick={() => { setShareMsg(''); setShareOpen(true) }}
+          >
+            <Icon name="chat" size={18} />
+            <span className="grow">Recados da equipe</span>
+            <span className="muted small">ative o link de leitura</span>
+          </button>
+        </section>
+      ) : null}
 
       {openSongId && (
         <div className="song-modal" role="dialog" aria-modal="true">

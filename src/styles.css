@@ -760,3 +760,61 @@ body.song-modal-open .toast { bottom: calc(18px + var(--safe)); }
   .bottom-nav { max-width: 640px; left: 50%; transform: translateX(-50%); border-radius: 16px 16px 0 0; }
   .song-page { padding-top: 26px; }
 }
+
+/* ---------- recados (chat) ---------- */
+.chat {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.chat-head {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; padding: 12px 14px;
+  color: var(--text); font-size: 14px; font-weight: 600; text-align: left;
+}
+.chat-head:active { background: var(--bg-3); }
+.chat-count {
+  min-width: 20px; height: 20px; padding: 0 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 10px; background: var(--accent); color: #fff;
+  font-size: 11px; font-weight: 700;
+}
+.chat-panel {
+  border-top: 1px solid var(--line);
+  padding: 12px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.chat-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+.chat-msg {
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px 10px;
+  max-width: 88%;
+  align-self: flex-start;
+}
+.chat-msg.mine {
+  align-self: flex-end;
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.chat-meta { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+.chat-meta strong { color: var(--text); font-size: 12px; }
+.chat-del { color: var(--muted); display: inline-flex; padding: 0; margin-left: auto; }
+.chat-del:active { color: var(--danger); }
+.chat-body { font-size: 14px; white-space: pre-wrap; word-break: break-word; }
+.chat-song {
+  display: inline-flex; align-items: center; gap: 5px;
+  margin-top: 6px; padding: 4px 9px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--bg-2); color: var(--accent-2);
+  font-size: 12px; max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chat-song:disabled { color: var(--muted); }
+.chat-composer { display: flex; flex-direction: column; gap: 8px; }
+.chat-select {
+  width: 100%; background: var(--bg-3); border: 1px solid var(--line);
+  color: var(--text); border-radius: 10px; padding: 9px 11px; font-size: 13px;
+}
+.chat-composer .icon-btn { flex: 0 0 auto; }

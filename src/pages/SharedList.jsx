@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icons'
+import ListChat from '../components/ListChat'
 import { SongView } from './Song'
 import { getSharedList, saveSharedList } from '../lib/store'
 
@@ -104,6 +105,8 @@ export default function SharedList() {
           </div>
         ))}
       </div>
+
+      <ListChat token={token} items={items} onOpenSong={setOpenSongId} />
 
       <p className="muted small">O tom que você ajusta fica salvo só para você e não altera a lista do dono.</p>
 

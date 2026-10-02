@@ -314,6 +314,70 @@ end;
 $$;
 
 -- ----------------------------------------------------------------------------
+-- LIST_MESSAGES: recados/chat da equipe, ancorado no link compartilhado
+-- (share_token). Todos que têm o link (autenticados) leem e escrevem; cada um
+-- só apaga as próprias mensagens.
+-- ----------------------------------------------------------------------------
+create table if not exists public.list_messages (
+  id uuid primary key default gen_random_uuid(),
+  share_token uuid not null,
+  user_id uuid not null references auth.users (id) on delete cascade default auth.uid(),
+  username text not null default 'Membro',
+  body text not null,
+  song_id uuid references public.songs (id) on delete set null,
+  created_at timestamptz not null default now(),
+  constraint list_messages_body_len check (char_length(body) between 1 and 2000)
+);
+
+create index if not exists list_messages_token_idx
+  on public.list_messages (share_token, created_at);
+
+alter table public.list_messages enable row level security;
+
+-- o usuário autenticado tem acesso a este link compartilhado?
+create or replace function public.can_access_share_token(p_token uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.lists l
+    where l.share_token = p_token
+      and l.is_public
+      and auth.uid() is not null
+  );
+$$;
+
+drop policy if exists list_messages_select on public.list_messages;
+create policy list_messages_select on public.list_messages
+  for select using (public.can_access_share_token(share_token));
+
+drop policy if exists list_messages_insert on public.list_messages;
+create policy list_messages_insert on public.list_messages
+  for insert with check (
+    auth.uid() = user_id
+    and public.can_access_share_token(share_token)
+  );
+
+drop policy if exists list_messages_delete on public.list_messages;
+create policy list_messages_delete on public.list_messages
+  for delete using (auth.uid() = user_id);
+
+grant select, insert, delete on public.list_messages to authenticated;
+grant execute on function public.can_access_share_token(uuid) to authenticated;
+
+-- Realtime: entrega mensagens novas na hora para quem está com a lista aberta.
+do $$
+begin
+  alter publication supabase_realtime add table public.list_messages;
+exception
+  when duplicate_object then null;
+  when undefined_object then null;
+end $$;
+
+-- ----------------------------------------------------------------------------
 -- ÍNDICES auxiliares usados pelas consultas da tela
 -- ----------------------------------------------------------------------------
 create index if not exists list_songs_order_idx on public.list_songs (list_id, position);
