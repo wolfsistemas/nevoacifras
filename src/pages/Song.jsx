@@ -6,6 +6,7 @@ import CifraView from '../components/CifraView'
 import { useAuth } from '../hooks/useAuth'
 import { callFetchSong } from '../lib/supabase'
 import { hasTabs } from '../lib/cifraSanitize'
+import { simplifyCifraLines } from '../lib/simplifyCifra'
 import { MAJOR_KEYS, MINOR_KEYS, shiftToKey, transposeChord } from '../lib/transpose'
 import { attachWakeLock } from '../lib/wakeLock'
 import { createMetronome, tapTempo } from '../lib/metronome'
@@ -138,6 +139,7 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
   const [toneOpen, setToneOpen] = useState(false)
   const [lists, setLists] = useState([])
   const [newList, setNewList] = useState('')
+  const baseSongRef = useRef(null)
   const [addedIds, setAddedIds] = useState([])
   const [toast, setToast] = useState('')
   const [copied, setCopied] = useState(false)
@@ -299,13 +301,17 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
     let raf
     let last = null
     const scroller = embedded ? document.querySelector('.song-modal') : window
+    const readPos = () => (scroller === window ? window.scrollY : scroller ? scroller.scrollTop : 0)
+    // Acumula a posição em float: em velocidades baixas o incremento por frame é
+    // menor que 1px e o scrollTop inteiro descartaria o avanço.
+    let pos = readPos()
     const step = (ts) => {
       if (last == null) last = ts
       const dt = ts - last
       last = ts
-      const dy = (pxSpeed * dt) / 1000
-      if (scroller === window) window.scrollBy(0, dy)
-      else if (scroller) scroller.scrollTop += dy
+      pos += (pxSpeed * dt) / 1000
+      if (scroller === window) window.scrollTo(0, pos)
+      else if (scroller) scroller.scrollTop = pos
       raf = requestAnimationFrame(step)
     }
     raf = requestAnimationFrame(step)
@@ -367,6 +373,11 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
   const goVersion = async (v) => {
     if (!song) return
     if ((song.version || 'original') === v) return
+    // volta da simplificada gerada localmente para a original já carregada
+    if (v === 'original' && song.generated && baseSongRef.current) {
+      setSong(baseSongRef.current)
+      return
+    }
     setStatus('scraping')
     try {
       let s = await getSongBySlug(song.slug_artist, song.slug_title, v)
@@ -381,6 +392,20 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
       if (!s?.id) throw new Error('Cifra não encontrada.')
       goToSong(s.id)
     } catch (e) {
+      // Se o Cifra Club não liberar a versão simplificada, gera localmente a
+      // partir da original (mesma estrutura, acordes simplificados).
+      if (v === 'simplificada') {
+        const base = song.generated && baseSongRef.current ? baseSongRef.current : song
+        baseSongRef.current = base
+        setSong({
+          ...base,
+          version: 'simplificada',
+          generated: true,
+          content: JSON.stringify(simplifyCifraLines(parseSongContent(base)))
+        })
+        setStatus('ok')
+        return
+      }
       setMessage(e?.message || 'Não foi possível carregar esta versão.')
       setStatus('error')
     }
@@ -597,7 +622,11 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
         {capo > 0 && <span className="chip">Capotraste <b>{capo}ª casa</b></span>}
         <span className="chip">Afinação {song.tuning || 'padrão'}</span>
         <a className="chip link" href={song.cifraclub_url} target="_blank" rel="noreferrer">
-          {song.version === 'simplificada' ? 'Simplificada no Cifra Club' : 'Original no Cifra Club'}
+          {song.generated
+            ? 'Simplificada (automática)'
+            : song.version === 'simplificada'
+              ? 'Simplificada no Cifra Club'
+              : 'Original no Cifra Club'}
         </a>
       </div>
 
@@ -650,20 +679,15 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
         </div>
 
         <div className="toolbar-row wrap">
-          <div className="ctl">
-            <button type="button" className="ctl-label ctl-link" onClick={() => song.tone_root && setToneOpen(true)}>
-              Tom
-            </button>
-            <button className="icon-btn sm" onClick={() => persistTone({ shift: Math.max(-11, shift - 1) })}>
-              <Icon name="a-down" size={16} />
-            </button>
-            <button type="button" className="ctl-value ctl-link" onClick={() => song.tone_root && setToneOpen(true)}>
-              {eff > 0 ? `+${eff}` : eff}
-            </button>
-            <button className="icon-btn sm" onClick={() => persistTone({ shift: Math.min(11, shift + 1) })}>
-              <Icon name="a-up" size={16} />
-            </button>
-          </div>
+          <button
+            type="button"
+            className="ctl ctl-link"
+            onClick={() => song.tone_root && setToneOpen(true)}
+            title="Escolher tom"
+          >
+            <span className="ctl-label">Tom</span>
+            <span className="ctl-value">{eff > 0 ? `+${eff}` : eff}</span>
+          </button>
 
           <div className="ctl">
             <span className="ctl-label">Capo</span>
