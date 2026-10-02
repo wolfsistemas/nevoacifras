@@ -1,5 +1,6 @@
-// Névoa Captura — roda no console ou via bookmarklet numa página de cifra do Cifra Club.
-// Captura a cifra aberta, converte para o formato do app e grava na sua conta Supabase.
+// Névoa Captura — roda no console ou via bookmarklet numa página do Cifra Club.
+//  - Numa página de música: captura a cifra aberta.
+//  - Numa página de artista/álbum: captura TODAS as músicas listadas.
 (function () {
   const SUPA_URL = 'https://luguppodlfqnnmnwooar.supabase.co'
   const ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imx1Z3VwcG9kbGZxbm5tbndvb2FyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0MzE5NDAsImV4cCI6MjEwNDAwNzk0MH0.C-rR3YiFPqZcqOhB_JGis6nrtrcWWe6rnQXnYkKdxNw'
@@ -188,24 +189,24 @@
     return { lines, tuning: tuning || 'E A D G C F', toneRoot }
   }
 
-  // ---------------- captura ----------------
+  // ---------------- nomes/slugs ----------------
   const cap = (s) => String(s || '').replace(/-/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (c) => c.toUpperCase())
-  function slugInfo() {
-    const parts = location.pathname.split('/').filter(Boolean)
+  function slugInfoFromPath(pathname) {
+    const parts = String(pathname || '').split('/').filter(Boolean)
     return {
-      slugArtist: (parts[0] || '').replace(/\.html$/, ''),
-      slugTitle: (parts[1] || '').replace(/\.html$/, '')
+      slugArtist: (parts[0] || '').replace(/\.html?$/i, ''),
+      slugTitle: (parts[1] || '').replace(/\.html?$/i, '')
     }
   }
-  function textOf(sel) {
-    const el = document.querySelector(sel)
-    return el ? el.textContent.trim() : ''
-  }
-  function readNames(slugArtist, slugTitle) {
+  function readNames(root, slugArtist, slugTitle) {
+    const textOf = (sel) => {
+      const el = root.querySelector(sel)
+      return el ? el.textContent.trim() : ''
+    }
     let title = textOf('h1')
     let artist = textOf('.header h2 a') || textOf('.header .artista') || textOf('h2 a') || textOf('a.artist')
     if (!title || !artist) {
-      const og = (document.querySelector('meta[property="og:title"]')?.content || document.title || '')
+      const og = (root.querySelector('meta[property="og:title"]')?.content || root.title || '')
         .replace(/cifra\s*club.*$/i, '')
         .replace(/\s*[-–|]\s*$/, '')
         .trim()
@@ -215,6 +216,21 @@
     }
     return { artist: artist || cap(slugArtist), title: title || cap(slugTitle) }
   }
+  function buildSongFromHtml(html, root, slugArtist, slugTitle) {
+    const parsed = parseCifraHtml(html)
+    const { artist, title } = readNames(root, slugArtist, slugTitle)
+    return {
+      artist,
+      title,
+      slug_artist: slugArtist,
+      slug_title: slugTitle,
+      tuning: parsed.tuning,
+      tone_root: parsed.toneRoot,
+      content: parsed.lines
+    }
+  }
+
+  // ---------------- armazenamento/envio ----------------
   function readAll() {
     try {
       return JSON.parse(localStorage.getItem(KEY) || '{}') || {}
@@ -227,22 +243,11 @@
       localStorage.setItem(KEY, JSON.stringify(all))
     } catch {}
   }
-  function buildSong() {
-    const pre = document.querySelector('pre[data-chord-content="true"]') || document.querySelector('pre')
-    if (!pre) return null
-    const { slugArtist, slugTitle } = slugInfo()
-    if (!slugArtist || !slugTitle) return null
-    const parsed = parseCifraHtml(pre.outerHTML)
-    const { artist, title } = readNames(slugArtist, slugTitle)
-    return {
-      artist,
-      title,
-      slug_artist: slugArtist,
-      slug_title: slugTitle,
-      tuning: parsed.tuning,
-      tone_root: parsed.toneRoot,
-      content: parsed.lines
-    }
+  function remember(song) {
+    const all = readAll()
+    all[song.slug_artist + '/' + song.slug_title] = song
+    writeAll(all)
+    return Object.keys(all).length
   }
   async function send(song) {
     const res = await fetch(SUPA_URL + '/rest/v1/rpc/capture_song', {
@@ -262,10 +267,19 @@
     if (!res.ok) throw new Error(await res.text())
     return res.json()
   }
+
+  // ---------------- página de música ----------------
+  function currentSongPage() {
+    const pre = document.querySelector('pre[data-chord-content="true"]') || document.querySelector('pre')
+    if (!pre) return null
+    const { slugArtist, slugTitle } = slugInfoFromPath(location.pathname)
+    if (!slugArtist || !slugTitle) return null
+    return buildSongFromHtml(document.documentElement.outerHTML, document, slugArtist, slugTitle)
+  }
   async function capture() {
     let song
     try {
-      song = buildSong()
+      song = currentSongPage()
     } catch (e) {
       console.warn('Névoa: falha ao ler a cifra —', e.message)
       return null
@@ -274,24 +288,122 @@
       console.warn('Névoa: nenhuma cifra encontrada nesta página.')
       return null
     }
-    const all = readAll()
-    all[song.slug_artist + '/' + song.slug_title] = song
-    writeAll(all)
+    const n = remember(song)
     try {
       const r = await send(song)
-      console.log(
-        (r.status === 'inserted' ? '✅ gravada: ' : '↩︎ já existia: ') +
-          song.artist + ' - ' + song.title +
-          '  (' + Object.keys(all).length + ' nesta sessão)'
-      )
+      console.log((r.status === 'inserted' ? '✅ gravada: ' : '↩︎ já existia: ') + song.artist + ' - ' + song.title + '  (' + n + ' nesta sessão)')
     } catch (e) {
       console.warn('⚠️ capturada localmente, mas não enviou (' + e.message.slice(0, 80) + '). Use nevoa.push()')
     }
     return song
   }
+
+  // ---------------- página de artista/álbum ----------------
+  const SITE_HOSTS = ['www.cifraclub.com.br', 'cifraclub.com.br']
+  function isArtistPage() {
+    if (!SITE_HOSTS.includes(location.hostname)) return false
+    const parts = location.pathname.split('/').filter(Boolean)
+    return parts.length === 1
+  }
+  function artistSlugNow() {
+    return location.pathname.split('/').filter(Boolean)[0] || ''
+  }
+  function collectLinksFrom(root, artistSlug, seen) {
+    const out = []
+    root.querySelectorAll('a[href]').forEach((a) => {
+      let url
+      try {
+        url = new URL(a.getAttribute('href'), location.origin)
+      } catch {
+        return
+      }
+      if (!SITE_HOSTS.includes(url.hostname)) return
+      if (url.search || url.hash) return
+      const parts = url.pathname.split('/').filter(Boolean)
+      if (parts.length !== 2) return
+      if (parts[0] !== artistSlug) return
+      const slugTitle = parts[1].replace(/\.html?$/i, '')
+      if (!slugTitle || seen.has(slugTitle)) return
+      seen.add(slugTitle)
+      out.push({ slugArtist: artistSlug, slugTitle, url: url.origin + url.pathname })
+    })
+    return out
+  }
+  function collectArtistLinks() {
+    return collectLinksFrom(document, artistSlugNow(), new Set())
+  }
+  function findNextPage() {
+    const artistSlug = artistSlugNow()
+    const links = []
+    document.querySelectorAll('a[href]').forEach((a) => {
+      let url
+      try {
+        url = new URL(a.getAttribute('href'), location.origin)
+      } catch {
+        return
+      }
+      if (!SITE_HOSTS.includes(url.hostname)) return
+      const parts = url.pathname.split('/').filter(Boolean)
+      const isPager = url.search.match(/[?&](pagina|page|p)=\d+/i) || /\/pagina\/\d+/i.test(url.pathname) || /\/page\/\d+/i.test(url.pathname)
+      if (isPager && parts[0] === artistSlug) links.push(url.href)
+    })
+    return [...new Set(links)]
+  }
+  async function captureUrl(link) {
+    const res = await fetch(link.url)
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const html = await res.text()
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    const song = buildSongFromHtml(html, doc, link.slugArtist, link.slugTitle)
+    remember(song)
+    return send(song)
+  }
+  async function artist(followPages) {
+    if (!isArtistPage()) {
+      console.warn('Névoa: abra a página do artista (ex.: cifraclub.com.br/nome-do-artista/) e rode de novo.')
+      return
+    }
+    const artistSlug = artistSlugNow()
+    const queue = collectArtistLinks()
+    const seen = new Set(queue.map((q) => q.slugTitle))
+    const nexts = findNextPage()
+    if (followPages && nexts.length) {
+      for (const pageUrl of nexts.slice(0, 20)) {
+        try {
+          const res = await fetch(pageUrl)
+          const html = await res.text()
+          const doc = new DOMParser().parseFromString(html, 'text/html')
+          collectLinksFrom(doc, artistSlug, seen).forEach((l) => queue.push(l))
+        } catch {}
+      }
+    }
+    if (!queue.length) {
+      console.warn('Névoa: não achei músicas nesta página. (Talvez seja preciso abrir a lista de músicas do artista.)')
+      return
+    }
+    console.log('Névoa: ' + queue.length + ' músicas encontradas. Capturando...')
+    let ins = 0
+    let exi = 0
+    let err = 0
+    for (let i = 0; i < queue.length; i++) {
+      const link = queue[i]
+      try {
+        const r = await captureUrl(link)
+        if (r.status === 'inserted') ins++
+        else exi++
+      } catch (e) {
+        err++
+        console.warn('  [' + (i + 1) + '/' + queue.length + '] falhou ' + link.slugArtist + '/' + link.slugTitle + ' — ' + e.message.slice(0, 60))
+      }
+      console.log('  [' + (i + 1) + '/' + queue.length + '] ' + link.slugTitle + (i + 1 < queue.length ? '' : ''))
+      await new Promise((r) => setTimeout(r, 150))
+    }
+    console.log('Névoa: pronto. gravadas ' + ins + ' · já existiam ' + exi + ' · erros ' + err)
+  }
+
+  // ---------------- utilitários ----------------
   async function push() {
-    const all = readAll()
-    const songs = Object.values(all)
+    const songs = Object.values(readAll())
     let ok = 0
     for (const s of songs) {
       try {
@@ -313,7 +425,7 @@
       navigator.clipboard && navigator.clipboard.writeText(json)
     } catch {}
     console.log(json)
-    console.log('Névoa: JSON copiado para a área de transferência (' + Object.keys(readAll()).length + ' músicas).')
+    console.log('Névoa: JSON copiado (' + Object.keys(readAll()).length + ' músicas).')
     return json
   }
   function clear() {
@@ -321,8 +433,14 @@
     console.log('Névoa: capturas locais apagadas.')
   }
 
-  window.nevoa = { capture, push, list, export: exportAll, clear, _all: readAll }
+  window.nevoa = { capture, artist, push, list, export: exportAll, clear, _all: readAll }
   console.log('%cNévoa Captura', 'font-weight:bold;color:#7c5cff')
-  console.log('nevoa.capture() captura a música aberta · nevoa.list() · nevoa.export() · nevoa.push()')
-  capture()
+  console.log('Música: nevoa.capture() · Artista/álbum: nevoa.artist() · nevoa.artist(true) segue a paginação · nevoa.list() · nevoa.export() · nevoa.push()')
+
+  if (isArtistPage()) {
+    console.log('Página de artista detectada — capturando todas as músicas listadas...')
+    artist(false)
+  } else {
+    capture()
+  }
 })()
