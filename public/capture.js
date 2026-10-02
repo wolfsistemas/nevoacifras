@@ -447,29 +447,29 @@
     if (last) console.log('Névoa: lista com ' + last + ' músicas.')
   }
   async function saveSongs(songs) {
-    let ins = 0
-    let exi = 0
-    let err = 0
-    let blocked = 0
+    const s = { ins: 0, exi: 0, dup: 0, err: 0, blocked: 0 }
     for (let i = 0; i < songs.length; i++) {
       const link = songs[i]
       try {
         const r = await captureUrl(link)
-        if (r.status === 'inserted') ins++
-        else exi++
-        console.log('  [' + (i + 1) + '/' + songs.length + '] ok: ' + link.slugArtist + '/' + link.slugTitle)
+        if (r.status === 'inserted') s.ins++
+        else if (r.status === 'duplicate') s.dup++
+        else s.exi++
+        const tag = r.status === 'inserted' ? 'gravada' : r.status === 'duplicate' ? 'duplicada' : 'já existia'
+        console.log('  [' + (i + 1) + '/' + songs.length + '] ' + tag + ': ' + link.slugArtist + '/' + link.slugTitle)
       } catch (e) {
-        err++
-        if (/HTTP 403|HTTP 429|Failed to fetch/i.test(e.message)) blocked++
+        s.err++
+        if (/HTTP 403|HTTP 429|Failed to fetch/i.test(e.message)) s.blocked++
         console.warn('  [' + (i + 1) + '/' + songs.length + '] falhou ' + link.slugArtist + '/' + link.slugTitle + ' — ' + e.message.slice(0, 60))
-        if (blocked >= 5) {
+        if (s.blocked >= 5) {
           console.warn('Névoa: bloqueio temporário do Cifra Club. Parei; espere alguns minutos e rode de novo (o que já gravou fica salvo).')
           break
         }
       }
       await wait(350)
     }
-    console.log('Névoa: pronto. gravadas ' + ins + ' · já existiam ' + exi + ' · erros ' + err)
+    console.log('Névoa: lote → gravadas ' + s.ins + ' · já existiam ' + s.exi + ' · duplicadas ' + s.dup + ' · erros ' + s.err)
+    return s
   }
   function mergeSongs(queue, extra) {
     const seen = new Set(queue.map((q) => q.slugArtist + '/' + q.slugTitle))
@@ -509,35 +509,46 @@
     console.log('Névoa: ' + queue.length + ' músicas encontradas. Capturando...')
     await saveSongs(queue)
   }
-  // Percorre as páginas de "Explorar > Músicas" filtradas por gênero.
-  // Ex.: nevoa.genre({ genre: 30, from: 1, pages: 20 })  // Gospel/Religioso
-  //      nevoa.genre({ resume: true, pages: 50 })        // continua de onde parou
-  //      nevoa.genre({ capture: false })                 // só lista, não baixa as cifras
+  // Percorre "Explorar > Músicas" por gênero, em lotes automáticos.
+  // Ex.: nevoa.genre()                          // Gospel (30), contínuo até o fim
+  //      nevoa.genre({ pages: 40 })             // só 40 páginas e para
+  //      nevoa.genre({ resume: true })          // continua de onde parou
+  //      nevoa.genre({ capture: false })        // só lista, não baixa as cifras
   async function genre(opts) {
     opts = opts || {}
     const g = opts.genre || 30
     const doCapture = opts.capture !== false
-    let from = opts.from || 1
-    const pages = opts.pages || 20
-    const delay = opts.delay == null ? 450 : opts.delay
+    const batch = opts.batch || 15
+    const maxPages = opts.pages || 0
+    const pause = opts.pause == null ? 8000 : opts.pause
+    const delay = opts.delay == null ? 500 : opts.delay
     const resumeKey = 'nevoa_genre_' + g
     if (!onCifraclub()) {
       console.warn('Névoa: abra uma página do Cifra Club primeiro.')
       return
     }
+    let page = opts.from || 1
     if (opts.resume) {
       const saved = parseInt(localStorage.getItem(resumeKey) || '0', 10)
       if (saved) {
-        from = saved + 1
-        console.log('Névoa: retomando a partir da página ' + from + '.')
+        page = saved + 1
+        console.log('Névoa: retomando a partir da página ' + page + '.')
       }
     }
-    const queue = []
     const seen = new Set()
+    const collected = []
+    let pending = []
     let empty = 0
-    let stopped = false
-    for (let p = from; p < from + pages; p++) {
-      const url = 'https://www.cifraclub.com.br/explorar/musicas/?genre=' + g + '&page=' + p
+    let processed = 0
+    let done = false
+    const total = { ins: 0, exi: 0, dup: 0, err: 0, blocked: 0, found: 0 }
+    console.log('Névoa: gênero ' + g + ' · começando na página ' + page + (maxPages ? ' · ' + maxPages + ' páginas' : ' · contínuo até o fim') + '.')
+    while (!done) {
+      if (maxPages && processed >= maxPages) {
+        console.log('Névoa: limite de ' + maxPages + ' páginas alcançado.')
+        break
+      }
+      const url = 'https://www.cifraclub.com.br/explorar/musicas/?genre=' + g + '&page=' + page
       let doc
       try {
         const res = await fetch(url, { credentials: 'same-origin' })
@@ -546,11 +557,13 @@
         doc = new DOMParser().parseFromString(html, 'text/html')
       } catch (e) {
         if (/403|429|Failed to fetch/i.test(e.message)) {
-          console.warn('Névoa: bloqueio na página ' + p + ' (' + e.message + '). Parei aqui; espere alguns minutos e rode nevoa.genre({ resume: true }).')
-          stopped = true
+          console.warn('Névoa: bloqueio na página ' + page + ' (' + e.message + '). Parei; espere alguns minutos e rode nevoa.genre({ resume: true }).')
+          done = true
           break
         }
-        console.warn('Névoa: página ' + p + ' falhou — ' + e.message.slice(0, 60))
+        console.warn('Névoa: página ' + page + ' falhou — ' + e.message.slice(0, 60))
+        page++
+        processed++
         continue
       }
       const found = collectSongsFrom(doc, 'www.cifraclub.com.br')
@@ -559,31 +572,47 @@
         const k = s.slugArtist + '/' + s.slugTitle
         if (!seen.has(k)) {
           seen.add(k)
-          queue.push(s)
+          pending.push(s)
+          collected.push(s)
           added++
         }
       }
-      localStorage.setItem(resumeKey, String(p))
-      console.log('Névoa: página ' + p + ' → ' + found.length + ' músicas (' + added + ' novas · total ' + queue.length + ')')
+      total.found += found.length
+      localStorage.setItem(resumeKey, String(page))
+      console.log('Névoa: página ' + page + ' → ' + found.length + ' músicas (' + added + ' novas · ' + pending.length + ' no lote)')
       if (found.length === 0) {
         empty++
         if (empty >= 2) {
-          console.log('Névoa: fim dos resultados na página ' + p + '.')
-          break
+          console.log('Névoa: fim dos resultados na página ' + page + '.')
+          done = true
         }
       } else {
         empty = 0
       }
-      await wait(delay)
+      page++
+      processed++
+      if (doCapture && pending.length && (processed % batch === 0 || done)) {
+        const s = await saveSongs(pending)
+        pending = []
+        total.ins += s.ins; total.exi += s.exi; total.dup += s.dup; total.err += s.err; total.blocked += s.blocked
+        if (s.blocked >= 5) {
+          done = true
+        } else if (!done && processed % batch === 0) {
+          console.log('Névoa: lote concluído (' + processed + ' páginas). Pausando ' + Math.round(pause / 1000) + 's...')
+          await wait(pause)
+        }
+      } else if (!done) {
+        await wait(delay)
+      }
     }
-    window.nevoa._lastLinks = queue
-    console.log('Névoa: ' + queue.length + ' músicas do gênero ' + g + ' reunidas.')
-    if (doCapture && queue.length) {
-      console.log('Névoa: capturando as cifras (não feche a aba)...')
-      await saveSongs(queue)
+    if (doCapture && pending.length) {
+      const s = await saveSongs(pending)
+      total.ins += s.ins; total.exi += s.exi; total.dup += s.dup; total.err += s.err; total.blocked += s.blocked
     }
-    if (stopped) console.log('Névoa: retome depois com nevoa.genre({ resume: true }).')
-    return queue
+    window.nevoa._lastLinks = collected
+    console.log('Névoa: fim. gravadas ' + total.ins + ' · já existiam ' + total.exi + ' · duplicadas ' + total.dup + ' · erros ' + total.err + ' · próxima página: ' + page)
+    if (total.blocked) console.log('Névoa: houve bloqueio; rode nevoa.genre({ resume: true }) mais tarde.')
+    return { page: page, ins: total.ins, exi: total.exi, dup: total.dup, err: total.err, blocked: total.blocked, links: collected }
   }
 
   function preview() {
@@ -627,7 +656,7 @@
 
   window.nevoa = { capture, artist, save: artist, genre, preview, push, list, export: exportAll, clear, _all: readAll }
   console.log('%cNévoa Captura', 'font-weight:bold;color:#7c5cff')
-  console.log('Música: nevoa.capture() · Lista (artista/álbum/explore): nevoa.artist() · Gospel por gênero: nevoa.genre() · nevoa.preview() mostra o que achou · nevoa.list() · nevoa.export() · nevoa.push()')
+  console.log('Música: nevoa.capture() · Lista (artista/álbum/explore): nevoa.artist() · Gospel em lotes: nevoa.genre() · Parar/continuar: nevoa.genre({ resume: true }) · nevoa.preview() mostra o que achou · nevoa.list() · nevoa.export() · nevoa.push()')
 
   if (hasSongContent()) {
     capture()
