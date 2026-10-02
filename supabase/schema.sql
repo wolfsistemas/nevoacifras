@@ -381,6 +381,92 @@ exception
 end $$;
 
 -- ----------------------------------------------------------------------------
+-- Notificações push dos recados (Web Push / VAPID)
+-- ----------------------------------------------------------------------------
+-- app_config guarda a URL da Edge Function e o segredo compartilhado.
+-- RLS sem políticas: apenas service_role / funções definer leem.
+-- As chaves NÃO ficam versionadas; após aplicar este arquivo, semeie:
+--   insert into public.app_config(key, value) values
+--     ('push_secret', '<segredo-aleatorio>'),
+--     ('push_url', 'https://<ref>.supabase.co/functions/v1/send-chat-push')
+--   on conflict (key) do update set value = excluded.value;
+create table if not exists public.app_config (
+  key text primary key,
+  value text not null
+);
+alter table public.app_config enable row level security;
+
+create table if not exists public.push_subscriptions (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  share_token uuid not null,
+  endpoint text not null,
+  p256dh text not null,
+  auth text not null,
+  created_at timestamptz not null default now(),
+  unique (share_token, endpoint)
+);
+alter table public.push_subscriptions enable row level security;
+
+drop policy if exists push_select_own on public.push_subscriptions;
+create policy push_select_own on public.push_subscriptions
+  for select using (auth.uid() = user_id);
+
+drop policy if exists push_insert_own on public.push_subscriptions;
+create policy push_insert_own on public.push_subscriptions
+  for insert with check (
+    auth.uid() = user_id
+    and (
+      public.can_access_share_token(share_token)
+      or exists (
+        select 1 from public.lists l
+        where l.share_token = push_subscriptions.share_token
+          and l.user_id = auth.uid()
+      )
+    )
+  );
+
+drop policy if exists push_delete_own on public.push_subscriptions;
+create policy push_delete_own on public.push_subscriptions
+  for delete using (auth.uid() = user_id);
+
+create index if not exists push_subscriptions_token_idx on public.push_subscriptions (share_token);
+create index if not exists push_subscriptions_user_idx on public.push_subscriptions (user_id);
+
+grant select, insert, delete on public.push_subscriptions to authenticated;
+
+-- Dispara a Edge Function send-chat-push a cada recado novo (via pg_net).
+create or replace function public.on_list_message_push()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, net
+as $$
+declare
+  v_secret text;
+  v_url text;
+begin
+  select value into v_secret from public.app_config where key = 'push_secret';
+  select value into v_url from public.app_config where key = 'push_url';
+  if v_secret is null or v_url is null then
+    return new;
+  end if;
+  perform net.http_post(
+    url := v_url,
+    body := jsonb_build_object('record', to_jsonb(new)),
+    headers := jsonb_build_object('Content-Type', 'application/json', 'x-push-secret', v_secret),
+    timeout_milliseconds := 5000
+  );
+  return new;
+end;
+$$;
+
+drop trigger if exists list_messages_push on public.list_messages;
+create trigger list_messages_push
+after insert on public.list_messages
+for each row execute function public.on_list_message_push();
+
+-- ----------------------------------------------------------------------------
 -- ÍNDICES auxiliares usados pelas consultas da tela
 -- ----------------------------------------------------------------------------
 create index if not exists list_songs_order_idx on public.list_songs (list_id, position);

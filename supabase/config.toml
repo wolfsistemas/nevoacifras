@@ -5,3 +5,6 @@ project_id = "luguppodlfqnnmnwooar"
 
 [functions.fetch-song]
 verify_jwt = true
+
+[functions.send-chat-push]
+verify_jwt = false

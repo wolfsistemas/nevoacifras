@@ -4,6 +4,15 @@ import { useAuth } from '../hooks/useAuth'
 import { useOnline } from '../hooks/useOnline'
 import { supabase } from '../lib/supabase'
 import { listMessages, sendListMessage, deleteListMessage } from '../lib/store'
+import {
+  enablePush,
+  disablePush,
+  getPushState,
+  getSeenAt,
+  markSeen,
+  isIOS,
+  isStandalone
+} from '../lib/push'
 
 function formatTime(iso) {
   const d = new Date(iso)
@@ -31,6 +40,10 @@ export default function ListChat({ token, items = [], onOpenSong }) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
   const [typers, setTypers] = useState({})
+  const [seenAt, setSeenAt] = useState(() => (token ? getSeenAt(token) : ''))
+  const [pushState, setPushState] = useState('loading')
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushHint, setPushHint] = useState('')
   const endRef = useRef(null)
   const channelRef = useRef(null)
   const meRef = useRef({ id: null, username: 'Membro' })
@@ -114,6 +127,28 @@ export default function ListChat({ token, items = [], onOpenSong }) {
     if (open && endRef.current) endRef.current.scrollIntoView({ block: 'nearest' })
   }, [messages, open])
 
+  useEffect(() => {
+    if (!token) return
+    let active = true
+    getPushState().then((s) => {
+      if (active) setPushState(s)
+    })
+    return () => {
+      active = false
+    }
+  }, [token])
+
+  // Marca os recados como lidos enquanto a conversa está aberta.
+  useEffect(() => {
+    if (!open || !token) return
+    const lastAt = messages.reduce((acc, m) => (m.created_at > acc ? m.created_at : acc), '')
+    const value = lastAt || new Date().toISOString()
+    if (value !== seenAt) {
+      markSeen(token, value)
+      setSeenAt(value)
+    }
+  }, [open, messages, token, seenAt])
+
   const notifyTyping = () => {
     const ch = channelRef.current
     const me = meRef.current
@@ -164,13 +199,38 @@ export default function ListChat({ token, items = [], onOpenSong }) {
   if (!token) return null
 
   const typingNames = Object.values(typers).map((t) => t.username).filter(Boolean)
+  const unreadCount = messages.filter(
+    (m) => m.created_at > seenAt && (!user || m.user_id !== user.id)
+  ).length
+
+  const togglePush = async () => {
+    if (pushBusy) return
+    setPushBusy(true)
+    setPushHint('')
+    setError('')
+    try {
+      if (pushState === 'on') {
+        await disablePush(token)
+        setPushState('off')
+        setPushHint('Notificações desativadas neste aparelho.')
+      } else {
+        await enablePush(token)
+        setPushState('on')
+        setPushHint('Pronto! Você será avisado de novos recados.')
+      }
+    } catch (e) {
+      setPushHint(e?.message || 'Não foi possível ativar agora.')
+    } finally {
+      setPushBusy(false)
+    }
+  }
 
   return (
     <section className="chat">
       <button type="button" className="chat-head" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
         <Icon name="chat" size={18} />
         <span className="grow">Recados da equipe</span>
-        {messages.length > 0 && <span className="chat-count">{messages.length}</span>}
+        {unreadCount > 0 && <span className="chat-count">{unreadCount}</span>}
         <Icon name={open ? 'up' : 'down'} size={16} />
       </button>
 
@@ -225,6 +285,29 @@ export default function ListChat({ token, items = [], onOpenSong }) {
               Você está offline: dá para ler os recados salvos, mas enviar precisa de conexão.
             </p>
           )}
+
+          <div className="chat-push">
+            {pushState === 'unsupported' ? (
+              <span className="muted small">
+                {isIOS() && !isStandalone()
+                  ? 'No iPhone, adicione o app à Tela de Início para receber notificações.'
+                  : 'Este navegador não aceita notificações.'}
+              </span>
+            ) : pushState === 'denied' ? (
+              <span className="muted small">Notificações bloqueadas no navegador.</span>
+            ) : (
+              <button
+                type="button"
+                className={pushState === 'on' ? 'btn ghost sm-btn on-soft' : 'btn ghost sm-btn'}
+                onClick={togglePush}
+                disabled={pushBusy || !online}
+              >
+                <Icon name="bell" size={15} />
+                {pushState === 'on' ? 'Notificações ativas' : 'Ativar notificações'}
+              </button>
+            )}
+            {pushHint && <span className="muted small">{pushHint}</span>}
+          </div>
 
           <div className="chat-composer">
             {items.length > 0 && (

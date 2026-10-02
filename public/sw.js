@@ -1,5 +1,5 @@
-const SHELL = 'nevoa-shell-v3'
-const API = 'nevoa-api-v3'
+const SHELL = 'nevoa-shell-v4'
+const API = 'nevoa-api-v4'
 const MAX_API = 500
 const PRECACHE = ['./', './index.html', './manifest.json', './logo.png', './favicon.svg']
 
@@ -106,4 +106,44 @@ self.addEventListener('fetch', (e) => {
       })
     )
   }
+})
+
+self.addEventListener('push', (event) => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  } catch {
+    data = { body: event.data ? event.data.text() : '' }
+  }
+  const title = data.title || 'Nevoa Cifras'
+  const options = {
+    body: data.body || 'Novo recado na lista',
+    icon: './logo.png',
+    badge: './logo.png',
+    tag: data.tag || undefined,
+    data: { url: data.url || './' }
+  }
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const target = event.notification.data?.url || './'
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+      for (const client of windows) {
+        try {
+          await client.focus()
+        } catch {}
+        if ('navigate' in client) {
+          try {
+            await client.navigate(target)
+          } catch {}
+        }
+        return
+      }
+      if (self.clients.openWindow) await self.clients.openWindow(target)
+    })()
+  )
 })
