@@ -300,10 +300,17 @@
 
   // ---------------- página de artista/álbum ----------------
   const SITE_HOSTS = ['www.cifraclub.com.br', 'cifraclub.com.br']
-  function isArtistPage() {
-    if (!SITE_HOSTS.includes(location.hostname)) return false
-    const parts = location.pathname.split('/').filter(Boolean)
-    return parts.length === 1
+  // Segundos segmentos que NÃO são músicas (páginas de apoio do artista).
+  const PAGE_BLOCKLIST = new Set([
+    'fotos', 'discografia', 'albuns', 'albuns-e-singles', 'playlists', 'videos',
+    'biografia', 'letras', 'cifras', 'musicas', 'traducoes', 'notas', 'versoes',
+    'partituras', 'tabs-baixo'
+  ])
+  function onCifraclub() {
+    return SITE_HOSTS.includes(location.hostname)
+  }
+  function hasSongContent() {
+    return !!document.querySelector('pre[data-chord-content="true"]')
   }
   function artistSlugNow() {
     return location.pathname.split('/').filter(Boolean)[0] || ''
@@ -319,15 +326,22 @@
       }
       if (!SITE_HOSTS.includes(url.hostname)) return
       if (url.search || url.hash) return
+      if (/\.html?$/i.test(url.pathname)) return
       const parts = url.pathname.split('/').filter(Boolean)
       if (parts.length !== 2) return
       if (parts[0] !== artistSlug) return
-      const slugTitle = parts[1].replace(/\.html?$/i, '')
-      if (!slugTitle || seen.has(slugTitle)) return
+      const slugTitle = parts[1]
+      if (!slugTitle || PAGE_BLOCKLIST.has(slugTitle) || seen.has(slugTitle)) return
       seen.add(slugTitle)
       out.push({ slugArtist: artistSlug, slugTitle, url: url.origin + url.pathname })
     })
     return out
+  }
+  function isListingPage() {
+    if (!onCifraclub() || hasSongContent()) return false
+    const slug = artistSlugNow()
+    if (!slug) return false
+    return collectLinksFrom(document, slug, new Set()).length > 0
   }
   function collectArtistLinks() {
     return collectLinksFrom(document, artistSlugNow(), new Set())
@@ -358,11 +372,41 @@
     remember(song)
     return send(song)
   }
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+  // A lista do artista carrega o resto por AJAX ao clicar em "Mostrar mais".
+  // Clicamos até o botão sumir ou não surgirem músicas novas.
+  async function expandAll() {
+    const findBtn = () => document.querySelector('#js-a-t-more, [data-qnt][data-max]')
+    let btn = findBtn()
+    if (!btn) return
+    const max = parseInt(btn.getAttribute('data-max') || '0', 10) || 0
+    let last = collectArtistLinks().length
+    for (let k = 0; k < 40; k++) {
+      btn = findBtn()
+      if (!btn) break
+      if (max && last >= max) break
+      try {
+        btn.click()
+      } catch {
+        break
+      }
+      await wait(900)
+      const now = collectArtistLinks().length
+      if (now === last && k >= 1) break
+      last = now
+    }
+    if (last) console.log('Névoa: lista expandida para ' + last + ' músicas.')
+  }
   async function artist(followPages) {
-    if (!isArtistPage()) {
-      console.warn('Névoa: abra a página do artista (ex.: cifraclub.com.br/nome-do-artista/) e rode de novo.')
+    if (hasSongContent()) {
+      console.warn('Névoa: esta é uma página de música. Use nevoa.capture().')
       return
     }
+    if (!onCifraclub() || !artistSlugNow()) {
+      console.warn('Névoa: abra a página do artista/álbum no Cifra Club (ex.: cifraclub.com.br/nome-do-artista/) e rode de novo.')
+      return
+    }
+    await expandAll()
     const artistSlug = artistSlugNow()
     const queue = collectArtistLinks()
     const seen = new Set(queue.map((q) => q.slugTitle))
@@ -385,18 +429,24 @@
     let ins = 0
     let exi = 0
     let err = 0
+    let blocked = 0
     for (let i = 0; i < queue.length; i++) {
       const link = queue[i]
       try {
         const r = await captureUrl(link)
         if (r.status === 'inserted') ins++
         else exi++
+        console.log('  [' + (i + 1) + '/' + queue.length + '] ok: ' + link.slugTitle)
       } catch (e) {
         err++
+        if (/HTTP 403|HTTP 429|Failed to fetch/i.test(e.message)) blocked++
         console.warn('  [' + (i + 1) + '/' + queue.length + '] falhou ' + link.slugArtist + '/' + link.slugTitle + ' — ' + e.message.slice(0, 60))
+        if (blocked >= 5) {
+          console.warn('Névoa: o Cifra Club começou a bloquear as requisições. Parei para não piorar. Espere alguns minutos e rode nevoa.artist() de novo — o que já foi gravado fica salvo.')
+          break
+        }
       }
-      console.log('  [' + (i + 1) + '/' + queue.length + '] ' + link.slugTitle + (i + 1 < queue.length ? '' : ''))
-      await new Promise((r) => setTimeout(r, 150))
+      await new Promise((r) => setTimeout(r, 350))
     }
     console.log('Névoa: pronto. gravadas ' + ins + ' · já existiam ' + exi + ' · erros ' + err)
   }
@@ -437,8 +487,8 @@
   console.log('%cNévoa Captura', 'font-weight:bold;color:#7c5cff')
   console.log('Música: nevoa.capture() · Artista/álbum: nevoa.artist() · nevoa.artist(true) segue a paginação · nevoa.list() · nevoa.export() · nevoa.push()')
 
-  if (isArtistPage()) {
-    console.log('Página de artista detectada — capturando todas as músicas listadas...')
+  if (isListingPage()) {
+    console.log('Página de artista/álbum detectada — capturando todas as músicas listadas...')
     artist(false)
   } else {
     capture()
