@@ -154,9 +154,16 @@ alter table public.lists add column if not exists is_public boolean not null def
 -- Cópia salva de uma lista compartilhada: conteúdo somente-leitura para o dono
 -- (só o tom das cifras pode ser ajustado).
 alter table public.lists add column if not exists is_readonly boolean not null default false;
+-- Token da lista de origem. Quando preenchido, a cópia "segue" a lista original:
+-- ao abrir, sincroniza adições/remoções/reordenação feitas pelo dono, mantendo
+-- os ajustes de tom do leitor.
+alter table public.lists add column if not exists shared_from_token uuid;
 create unique index if not exists lists_share_token_idx
   on public.lists (share_token)
   where share_token is not null;
+create index if not exists lists_shared_from_idx
+  on public.lists (shared_from_token)
+  where shared_from_token is not null;
 
 create index if not exists lists_user_idx on public.lists (user_id);
 

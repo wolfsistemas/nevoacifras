@@ -249,6 +249,14 @@ export async function getListWithSongs(id) {
     .maybeSingle()
   if (e1) throw e1
   if (!list) return null
+  if (list.shared_from_token) {
+    // cópia seguidora: puxa as alterações do dono antes de exibir
+    try {
+      await syncFollowingList(list)
+    } catch {
+      // segue com o último conteúdo sincronizado se a origem estiver fora
+    }
+  }
   const withTone = await supabase
     .from('list_songs')
     .select(
@@ -359,10 +367,23 @@ export async function saveSharedList(token, toneScope) {
   if (!shared) throw new Error('Este link não está mais disponível.')
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Entre para salvar a lista.')
+  // já salvou esta mesma lista antes? reaproveita a cópia (e ela será
+  // sincronizada ao abrir).
+  const { data: existing } = await supabase
+    .from('lists')
+    .select('id')
+    .eq('user_id', user.id)
+    .eq('shared_from_token', token)
+    .maybeSingle()
+  if (existing?.id) return existing.id
   const baseName = String(shared.name || 'Lista compartilhada').trim().slice(0, 110)
   const { data: created, error } = await supabase
     .from('lists')
-    .insert({ name: `${baseName} (compartilhada)`, is_readonly: true })
+    .insert({
+      name: `${baseName} (compartilhada)`,
+      is_readonly: true,
+      shared_from_token: token
+    })
     .select('id')
     .single()
   if (error) throw error
@@ -380,6 +401,41 @@ export async function saveSharedList(token, toneScope) {
     if (e2) throw e2
   }
   return created.id
+}
+
+// Sincroniza uma cópia "seguidora" com a lista de origem: adiciona músicas
+// novas, remove as excluídas e atualiza a ordem. Os ajustes de tom do leitor
+// (shift/capo já salvos em list_songs) são preservados.
+export async function syncFollowingList(list) {
+  const token = list?.shared_from_token
+  if (!token || !list?.id) return false
+  const shared = await getSharedList(token)
+  if (!shared) return false
+  const sourceItems = (shared.items || []).filter((it) => it.song?.id)
+  const { data: own, error } = await supabase
+    .from('list_songs')
+    .select('id, song_id')
+    .eq('list_id', list.id)
+  if (error) throw error
+  const keep = new Set(sourceItems.map((it) => it.song.id))
+  // upsert só atualiza a posição: shift/capo existentes permanecem intactos
+  const rows = sourceItems.map((it, idx) => ({
+    list_id: list.id,
+    song_id: it.song.id,
+    position: it.position != null ? it.position : idx
+  }))
+  if (rows.length) {
+    const { error: e1 } = await supabase
+      .from('list_songs')
+      .upsert(rows, { onConflict: 'list_id,song_id' })
+    if (e1) throw e1
+  }
+  const toRemove = (own || []).filter((r) => !keep.has(r.song_id)).map((r) => r.id)
+  if (toRemove.length) {
+    const { error: e2 } = await supabase.from('list_songs').delete().in('id', toRemove)
+    if (e2) throw e2
+  }
+  return true
 }
 
 export async function updateListSongTone(listId, songId, tone) {
