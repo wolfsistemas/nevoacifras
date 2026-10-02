@@ -111,15 +111,25 @@ function mapChordsToWords(words, chordList) {
 
 export function parseCifraHtml(html) {
   const preMatch = html.match(/<pre[^>]*data-chord-content="true"[^>]*>([\s\S]*?)<\/pre>/i)
-  if (!preMatch) throw new Error('Conteúdo da cifra não encontrado na página.')
-  const preInner = preMatch[1]
-    .replace(/<div[^>]*class="[^"]*tabs?[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '\n[Tab]\n')
-
-  const blockRe = /<div class="kvMV">([\s\S]*?)<\/div>/gi
   const rows = []
-  let m
-  while ((m = blockRe.exec(preInner))) {
-    rows.push(...tokensToRows(scanTokens(m[1])))
+  if (preMatch) {
+    // Formato atual do Cifra Club: cada linha fica num <div class="kvMV">.
+    const preInner = preMatch[1]
+      .replace(/<div[^>]*class="[^"]*tabs?[^"]*"[^>]*>[\s\S]*?<\/div>/gi, '\n[Tab]\n')
+    const blockRe = /<div class="kvMV">([\s\S]*?)<\/div>/gi
+    let m
+    while ((m = blockRe.exec(preInner))) {
+      rows.push(...tokensToRows(scanTokens(m[1])))
+    }
+  } else {
+    // Formato antigo (snapshots do Wayback): tudo dentro de um único <pre>.
+    const oldMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i)
+    if (!oldMatch) throw new Error('Conteúdo da cifra não encontrado na página.')
+    const inner = oldMatch[1].replace(
+      /<span[^>]*class="[^"]*tablatura[^"]*"[^>]*>[\s\S]*?<\/span>/gi,
+      '\n[Tab]\n'
+    )
+    rows.push(...tokensToRows(scanTokens(inner)))
   }
 
   const lines = []

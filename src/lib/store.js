@@ -97,14 +97,20 @@ export async function signUpWithUsername(email, password, username) {
 export async function searchSongsLocal(q, limit = 30) {
   q = String(q || '').trim()
   if (!q) return []
-  const esc = q.replace(/[\\%_]/g, (c) => `\\${c}`)
-  const { data, error } = await supabase
+  const tokens = q.replace(/[\\%_*(),]/g, ' ').split(/\s+/).filter(Boolean)
+  if (!tokens.length) return []
+  let query = supabase
     .from('songs')
     .select('id, artist, title, slug_artist, slug_title, youtube_url, image_url, tone_root')
     .eq('version', 'original')
-    .or(`artist.ilike.%${esc}%,title.ilike.%${esc}%`)
-    .order('created_at', { ascending: false })
-    .limit(limit)
+  if (tokens.length === 1) {
+    const t = tokens[0]
+    query = query.or(`artist.ilike.*${t}*,title.ilike.*${t}*`)
+  } else {
+    const parts = tokens.map((t) => `or(artist.ilike.*${t}*,title.ilike.*${t}*)`)
+    query = query.or(`and(${parts.join(',')})`)
+  }
+  const { data, error } = await query.order('created_at', { ascending: false }).limit(limit)
   if (error) throw error
   return data || []
 }
