@@ -9,7 +9,14 @@ export default function AuthPage() {
   const { user } = useAuth()
   const [params] = useSearchParams()
   const [mode, setMode] = useState(params.get('m') === 'signup' ? 'signup' : 'login')
-  const rawNext = params.get('next') || ''
+  const storedNext = (() => {
+    try {
+      return sessionStorage.getItem('nevoa_next') || ''
+    } catch {
+      return ''
+    }
+  })()
+  const rawNext = params.get('next') || storedNext
   const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/'
 
   const [username, setUsername] = useState('')
@@ -20,7 +27,12 @@ export default function AuthPage() {
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
-    if (user) nav(next, { replace: true })
+    if (user) {
+      try {
+        sessionStorage.removeItem('nevoa_next')
+      } catch {}
+      nav(next, { replace: true })
+    }
   }, [user, nav, next])
 
   useEffect(() => {

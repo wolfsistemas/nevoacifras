@@ -60,8 +60,11 @@ function RequireAuth({ children }) {
   const loc = useLocation()
   if (loading) return <div className="page center-page">Carregando...</div>
   if (!user) {
-    const next = encodeURIComponent(`${loc.pathname}${loc.search}`)
-    return <Navigate to={`/auth?next=${next}`} replace />
+    const next = `${loc.pathname}${loc.search}`
+    try {
+      sessionStorage.setItem('nevoa_next', next)
+    } catch {}
+    return <Navigate to={`/auth?next=${encodeURIComponent(next)}`} replace />
   }
   return children
 }

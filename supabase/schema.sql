@@ -143,6 +143,7 @@ create table if not exists public.lists (
   name text not null,
   share_token uuid,
   is_public boolean not null default false,
+  is_readonly boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -150,6 +151,9 @@ create table if not exists public.lists (
 -- Migração idempotente: compartilhamento público somente-leitura
 alter table public.lists add column if not exists share_token uuid;
 alter table public.lists add column if not exists is_public boolean not null default false;
+-- Cópia salva de uma lista compartilhada: conteúdo somente-leitura para o dono
+-- (só o tom das cifras pode ser ajustado).
+alter table public.lists add column if not exists is_readonly boolean not null default false;
 create unique index if not exists lists_share_token_idx
   on public.lists (share_token)
   where share_token is not null;

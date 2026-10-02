@@ -169,42 +169,51 @@ export default function ListDetail() {
   if (!list) return <div className="page center-page">Carregando...</div>
 
   const items = list.items || []
+  const readOnly = !!list.is_readonly
 
   return (
     <div className="page">
       <header className="page-head row-space">
         <div className="grow">
-          {editing ? (
+          {editing && !readOnly ? (
             <div className="row">
               <input className="grow" value={name} onChange={(e) => setName(e.target.value)} />
               <button className="btn btn-primary sm-btn" onClick={saveName}>Salvar</button>
             </div>
           ) : (
-            <h1 onClick={() => { setName(list.name); setEditing(true) }}>{list.name}</h1>
+            <h1 onClick={() => { if (!readOnly) { setName(list.name); setEditing(true) } }}>{list.name}</h1>
           )}
           <p className="muted">
             {items.length} {items.length === 1 ? 'música' : 'músicas'}
+            {readOnly ? ' · somente leitura' : ''}
           </p>
+          {readOnly && (
+            <p className="muted small">
+              Lista compartilhada: você só pode ajustar o tom das cifras.
+            </p>
+          )}
         </div>
-        <div className="row">
-          <button
-            className="icon-btn"
-            onClick={() => { setShareMsg(''); setShareOpen(true) }}
-            aria-label="Compartilhar lista"
-          >
-            <Icon name="share" size={18} />
-          </button>
-          <button
-            className="icon-btn"
-            onClick={() => { setSearchOpen(true); setQ(''); setHits([]); setNotice('') }}
-            aria-label="Adicionar música"
-          >
-            <Icon name="plus" size={18} />
-          </button>
-          <button className="icon-btn" onClick={() => { setName(list.name); setEditing(true) }} aria-label="Renomear lista">
-            <Icon name="edit" size={18} />
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="row">
+            <button
+              className="icon-btn"
+              onClick={() => { setShareMsg(''); setShareOpen(true) }}
+              aria-label="Compartilhar lista"
+            >
+              <Icon name="share" size={18} />
+            </button>
+            <button
+              className="icon-btn"
+              onClick={() => { setSearchOpen(true); setQ(''); setHits([]); setNotice('') }}
+              aria-label="Adicionar música"
+            >
+              <Icon name="plus" size={18} />
+            </button>
+            <button className="icon-btn" onClick={() => { setName(list.name); setEditing(true) }} aria-label="Renomear lista">
+              <Icon name="edit" size={18} />
+            </button>
+          </div>
+        )}
       </header>
 
       <div className="stack">
@@ -237,22 +246,24 @@ export default function ListDetail() {
                 ) : null}
               </div>
             </button>
-            <div className="row-actions">
-              <button className="icon-btn sm" disabled={idx === 0} onClick={() => move(item, -1)} aria-label="Subir">
-                <Icon name="up" size={16} />
-              </button>
-              <button
-                className="icon-btn sm"
-                disabled={idx === items.length - 1}
-                onClick={() => move(item, 1)}
-                aria-label="Descer"
-              >
-                <Icon name="down" size={16} />
-              </button>
-              <button className="icon-btn sm" onClick={() => remove(item)} aria-label="Remover da lista">
-                <Icon name="trash" size={16} />
-              </button>
-            </div>
+            {!readOnly && (
+              <div className="row-actions">
+                <button className="icon-btn sm" disabled={idx === 0} onClick={() => move(item, -1)} aria-label="Subir">
+                  <Icon name="up" size={16} />
+                </button>
+                <button
+                  className="icon-btn sm"
+                  disabled={idx === items.length - 1}
+                  onClick={() => move(item, 1)}
+                  aria-label="Descer"
+                >
+                  <Icon name="down" size={16} />
+                </button>
+                <button className="icon-btn sm" onClick={() => remove(item)} aria-label="Remover da lista">
+                  <Icon name="trash" size={16} />
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>

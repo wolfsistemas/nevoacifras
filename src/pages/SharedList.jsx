@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Icon } from '../components/Icons'
 import { SongView } from './Song'
-import { getSharedList } from '../lib/store'
+import { getSharedList, saveSharedList } from '../lib/store'
 
 export default function SharedList() {
   const { token } = useParams()
@@ -10,6 +10,8 @@ export default function SharedList() {
   const [list, setList] = useState(null)
   const [status, setStatus] = useState('loading')
   const [openSongId, setOpenSongId] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState('')
   const toneScope = `share-${token}`
 
   const load = () => {
@@ -24,6 +26,18 @@ export default function SharedList() {
   useEffect(() => {
     load()
   }, [token])
+
+  const save = async () => {
+    setSaving(true)
+    setSaveMsg('')
+    try {
+      const newId = await saveSharedList(token, toneScope)
+      nav(`/lists/${newId}`)
+    } catch (e) {
+      setSaveMsg(e?.message || 'Não foi possível salvar a lista.')
+      setSaving(false)
+    }
+  }
 
   if (status === 'loading') return <div className="page center-page">Carregando...</div>
 
@@ -48,6 +62,14 @@ export default function SharedList() {
         <h1>{list.name}</h1>
         <p className="muted">
           {items.length} {items.length === 1 ? 'música' : 'músicas'} · somente leitura
+        </p>
+        <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={save} disabled={saving}>
+          <Icon name="list" size={18} />
+          {saving ? 'Salvando...' : 'Salvar nas minhas listas'}
+        </button>
+        {saveMsg && <p className="form-error">{saveMsg}</p>}
+        <p className="muted small">
+          A cópia fica somente leitura e você só ajusta o tom das cifras.
         </p>
       </header>
 

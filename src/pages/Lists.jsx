@@ -63,6 +63,7 @@ export default function Lists() {
               <strong>{l.name}</strong>
               <span className="muted small">
                 {l.count} {l.count === 1 ? 'música' : 'músicas'}
+                {l.is_readonly ? ' · somente leitura' : ''}
               </span>
             </span>
             <span className="row">

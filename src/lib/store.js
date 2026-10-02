@@ -33,8 +33,11 @@ export async function signInWithLogin(identifier, password) {
 
 export async function signInWithGoogle(next) {
   const base = authRedirectUrl()
-  const redirectTo = next
-    ? `${base}#${next.startsWith('/') ? next : `/${next}`}`
+  const safeNext = next && next.startsWith('/') && !next.startsWith('//') ? next : ''
+  // Volta para a própria tela de login já com o destino, para não perder o link
+  // quando o usuário precisa entrar antes de ver uma lista compartilhada.
+  const redirectTo = safeNext
+    ? `${base}#/auth?next=${encodeURIComponent(safeNext)}`
     : base
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
@@ -333,7 +336,7 @@ export async function getSharedList(token, toneScope) {
     .eq('list_id', list.id)
     .order('position', { ascending: true })
   if (e2) throw e2
-  const tones = loadListToneMap(toneScope || list.id)
+  const tones = toneScope ? loadListToneMap(toneScope) : {}
   const { id: _listId, ...meta } = list
   return {
     ...meta,
@@ -347,6 +350,36 @@ export async function getSharedList(token, toneScope) {
       })
       .filter((it) => it.song)
   }
+}
+
+// Salva uma cópia da lista compartilhada na conta do leitor, marcada como
+// somente-leitura: o dono da cópia não altera conteúdo (só o tom das cifras).
+export async function saveSharedList(token, toneScope) {
+  const shared = await getSharedList(token, toneScope)
+  if (!shared) throw new Error('Este link não está mais disponível.')
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Entre para salvar a lista.')
+  const baseName = String(shared.name || 'Lista compartilhada').trim().slice(0, 110)
+  const { data: created, error } = await supabase
+    .from('lists')
+    .insert({ name: `${baseName} (compartilhada)`, is_readonly: true })
+    .select('id')
+    .single()
+  if (error) throw error
+  const rows = (shared.items || [])
+    .filter((it) => it.song?.id)
+    .map((it, idx) => ({
+      list_id: created.id,
+      song_id: it.song.id,
+      position: it.position != null ? it.position : idx,
+      shift: Number(it.shift) || 0,
+      capo: Number(it.capo) || 0
+    }))
+  if (rows.length) {
+    const { error: e2 } = await supabase.from('list_songs').insert(rows)
+    if (e2) throw e2
+  }
+  return created.id
 }
 
 export async function updateListSongTone(listId, songId, tone) {
