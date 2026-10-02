@@ -332,6 +332,9 @@ create table if not exists public.list_messages (
 create index if not exists list_messages_token_idx
   on public.list_messages (share_token, created_at);
 
+-- Necessário para o Realtime entregar DELETE com o share_token (filtro por link).
+alter table public.list_messages replica identity full;
+
 alter table public.list_messages enable row level security;
 
 -- o usuário autenticado tem acesso a este link compartilhado?

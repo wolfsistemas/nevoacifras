@@ -14,6 +14,12 @@ function formatTime(iso) {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + time
 }
 
+function namesLabel(names) {
+  if (names.length === 1) return names[0] + ' está digitando'
+  if (names.length === 2) return names[0] + ' e ' + names[1] + ' estão digitando'
+  return 'Várias pessoas estão digitando'
+}
+
 export default function ListChat({ token, items = [], onOpenSong }) {
   const { user, profile } = useAuth()
   const online = useOnline()
@@ -24,7 +30,15 @@ export default function ListChat({ token, items = [], onOpenSong }) {
   const [songId, setSongId] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const [typers, setTypers] = useState({})
   const endRef = useRef(null)
+  const channelRef = useRef(null)
+  const meRef = useRef({ id: null, username: 'Membro' })
+  const lastTypingRef = useRef(0)
+
+  useEffect(() => {
+    meRef.current = { id: user?.id || null, username: profile?.username || 'Membro' }
+  }, [user, profile])
 
   const songsById = useMemo(() => {
     const map = new Map()
@@ -55,16 +69,62 @@ export default function ListChat({ token, items = [], onOpenSong }) {
           setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
         }
       )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'list_messages', filter: `share_token=eq.${token}` },
+        (payload) => {
+          const id = payload.old?.id
+          if (id) setMessages((prev) => prev.filter((m) => m.id !== id))
+        }
+      )
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        if (!payload || !payload.userId || payload.userId === meRef.current.id) return
+        setTypers((prev) => ({
+          ...prev,
+          [payload.userId]: { username: payload.username || 'Alguém', at: Date.now() }
+        }))
+      })
       .subscribe()
+    channelRef.current = channel
     return () => {
       active = false
+      channelRef.current = null
       supabase.removeChannel(channel)
     }
   }, [token])
 
+  // limpa quem parou de digitar
+  useEffect(() => {
+    const t = setInterval(() => {
+      setTypers((prev) => {
+        const now = Date.now()
+        const next = {}
+        let changed = false
+        for (const [k, v] of Object.entries(prev)) {
+          if (now - v.at < 3500) next[k] = v
+          else changed = true
+        }
+        return changed ? next : prev
+      })
+    }, 1500)
+    return () => clearInterval(t)
+  }, [])
+
   useEffect(() => {
     if (open && endRef.current) endRef.current.scrollIntoView({ block: 'nearest' })
   }, [messages, open])
+
+  const notifyTyping = () => {
+    const ch = channelRef.current
+    const me = meRef.current
+    if (!ch || !me.id) return
+    const now = Date.now()
+    if (now - lastTypingRef.current < 1500) return
+    lastTypingRef.current = now
+    try {
+      ch.send({ type: 'broadcast', event: 'typing', payload: { userId: me.id, username: me.username } })
+    } catch {}
+  }
 
   const send = async () => {
     const body = text.trim()
@@ -83,6 +143,7 @@ export default function ListChat({ token, items = [], onOpenSong }) {
       }
       setText('')
       setSongId('')
+      setTypers({})
     } catch (e) {
       setError(e?.message || 'Não foi possível enviar agora.')
     } finally {
@@ -101,6 +162,8 @@ export default function ListChat({ token, items = [], onOpenSong }) {
   }
 
   if (!token) return null
+
+  const typingNames = Object.values(typers).map((t) => t.username).filter(Boolean)
 
   return (
     <section className="chat">
@@ -151,6 +214,12 @@ export default function ListChat({ token, items = [], onOpenSong }) {
           </div>
 
           {error && <p className="form-error">{error}</p>}
+          {typingNames.length > 0 && (
+            <p className="chat-typing">
+              {namesLabel(typingNames)}
+              <span className="chat-dots"><i /><i /><i /></span>
+            </p>
+          )}
           {!online && (
             <p className="muted small">
               Você está offline: dá para ler os recados salvos, mas enviar precisa de conexão.
@@ -176,7 +245,10 @@ export default function ListChat({ token, items = [], onOpenSong }) {
                 value={text}
                 maxLength={2000}
                 placeholder="Escreva um recado..."
-                onChange={(e) => setText(e.target.value)}
+                onChange={(e) => {
+                  setText(e.target.value)
+                  notifyTyping()
+                }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
