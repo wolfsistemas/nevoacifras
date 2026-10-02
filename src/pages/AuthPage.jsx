@@ -9,6 +9,8 @@ export default function AuthPage() {
   const { user } = useAuth()
   const [params] = useSearchParams()
   const [mode, setMode] = useState(params.get('m') === 'signup' ? 'signup' : 'login')
+  const rawNext = params.get('next') || ''
+  const next = rawNext.startsWith('/') && !rawNext.startsWith('//') ? rawNext : '/'
 
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
@@ -18,8 +20,8 @@ export default function AuthPage() {
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
-    if (user) nav('/', { replace: true })
-  }, [user, nav])
+    if (user) nav(next, { replace: true })
+  }, [user, nav, next])
 
   useEffect(() => {
     const q = new URLSearchParams(window.location.search)
@@ -34,7 +36,7 @@ export default function AuthPage() {
     try {
       if (mode === 'login') {
         await signInWithLogin(email.trim(), password)
-        nav('/', { replace: true })
+        nav(next, { replace: true })
       } else {
         if (password.length < 6) throw new Error('A senha precisa de pelo menos 6 caracteres.')
         if (!/^[a-z0-9_.]{2,20}$/i.test(username.trim())) {
@@ -45,7 +47,7 @@ export default function AuthPage() {
           setNotice('Conta criada! Confirme o link enviado para o seu e-mail para entrar.')
           setMode('login')
         } else {
-          nav('/', { replace: true })
+          nav(next, { replace: true })
         }
       }
     } catch (err) {
@@ -81,7 +83,7 @@ export default function AuthPage() {
             setError('')
             setBusy(true)
             try {
-              await signInWithGoogle()
+              await signInWithGoogle(next)
             } catch (err) {
               setError(err?.message || 'Não foi possível entrar com o Google.')
               setBusy(false)

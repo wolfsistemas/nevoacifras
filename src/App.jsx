@@ -6,6 +6,7 @@ import Home from './pages/Home'
 import Song from './pages/Song'
 import Lists from './pages/Lists'
 import ListDetail from './pages/ListDetail'
+import SharedList from './pages/SharedList'
 import Favorites from './pages/Favorites'
 import Tuner from './pages/Tuner'
 import AuthPage from './pages/AuthPage'
@@ -31,6 +32,7 @@ function Layout() {
           <Route path="/song/:songId/:version?" element={<Song />} />
           <Route path="/lists" element={<RequireAuth><Lists /></RequireAuth>} />
           <Route path="/lists/:id" element={<RequireAuth><ListDetail /></RequireAuth>} />
+          <Route path="/share/:token" element={<RequireAuth><SharedList /></RequireAuth>} />
           <Route path="/favorites" element={<RequireAuth><Favorites /></RequireAuth>} />
           <Route path="/tuner" element={<Tuner />} />
           <Route path="/chords" element={<Chords />} />
@@ -55,8 +57,12 @@ function Layout() {
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth()
+  const loc = useLocation()
   if (loading) return <div className="page center-page">Carregando...</div>
-  if (!user) return <Navigate to="/auth" replace />
+  if (!user) {
+    const next = encodeURIComponent(`${loc.pathname}${loc.search}`)
+    return <Navigate to={`/auth?next=${next}`} replace />
+  }
   return children
 }
 

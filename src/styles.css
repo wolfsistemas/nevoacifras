@@ -311,17 +311,19 @@ a:hover { text-decoration: underline; }
 }
 .big-icon { color: var(--accent-2); }
 .setlist-row {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 6px;
   background: var(--bg-2);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 8px;
+  padding: 6px 8px;
 }
 .setlist-index {
-  width: 26px; text-align: center; color: var(--muted); font-size: 13px; font-weight: 700;
+  width: 22px; text-align: center; color: var(--muted); font-size: 12px; font-weight: 700;
 }
-.setlist-row .song-card { background: transparent; border: none; padding: 2px; flex: 1; }
-.col-actions { display: flex; flex-direction: column; gap: 6px; }
+.setlist-row .song-card { background: transparent; border: none; padding: 0; flex: 1; min-width: 0; }
+.setlist-row .song-card-art.small { width: 36px; height: 36px; flex-basis: 36px; }
+.setlist-row .icon-btn.sm { width: 28px; height: 28px; border-radius: 8px; }
+.row-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 
 /* ---------- forms ---------- */
 .form { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 340px; }
@@ -374,6 +376,8 @@ a:hover { text-decoration: underline; }
 }
 .page-head { display: flex; flex-direction: column; gap: 6px; }
 .page-head h1, .page-head h2 { margin: 0; }
+.page-head.row-space { align-items: flex-start; }
+.sheet-submit { margin-top: 14px; width: 100%; }
 .avatar {
   width: 52px; height: 52px; border-radius: 50%;
   background: linear-gradient(135deg, var(--accent), #9a6bff);

@@ -9,6 +9,7 @@ export default function Lists() {
   const { user } = useAuth()
   const [lists, setLists] = useState(null)
   const [name, setName] = useState('')
+  const [open, setOpen] = useState(false)
 
   const load = () => getLists().then(setLists)
 
@@ -21,6 +22,7 @@ export default function Lists() {
     if (!n) return
     await createList(n)
     setName('')
+    setOpen(false)
     load()
   }
 
@@ -33,30 +35,26 @@ export default function Lists() {
 
   return (
     <div className="page">
-      <header className="page-head">
-        <h1>Minhas listas</h1>
-        <p className="muted">Repertórios e setlists para ensaio e show.</p>
-      </header>
-
-      <div className="row">
-        <input
-          className="grow"
-          value={name}
-          placeholder="Nome da lista (ex: Acústico sexta)"
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && create()}
-        />
-        <button className="btn btn-primary btn-icon" onClick={create} aria-label="Criar lista">
+      <header className="page-head row-space">
+        <div className="grow">
+          <h1>Minhas listas</h1>
+          <p className="muted">Repertórios e setlists para ensaio e show.</p>
+        </div>
+        <button
+          className="icon-btn"
+          onClick={() => { setName(''); setOpen(true) }}
+          aria-label="Criar lista"
+        >
           <Icon name="plus" size={18} />
         </button>
-      </div>
+      </header>
 
       <div className="stack">
         {lists === null && <p className="muted">Carregando...</p>}
         {lists && lists.length === 0 && (
           <div className="empty-state">
             <Icon name="list" size={34} />
-            <p className="muted">Nenhuma lista ainda. Crie a primeira acima.</p>
+            <p className="muted">Nenhuma lista ainda. Toque no + para criar a primeira.</p>
           </div>
         )}
         {lists?.map((l) => (
@@ -80,6 +78,27 @@ export default function Lists() {
           </div>
         ))}
       </div>
+
+      {open && (
+        <div className="sheet-backdrop" onClick={() => setOpen(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <h3 className="sheet-title">Nova lista</h3>
+            <div className="search-row">
+              <Icon name="list" size={18} />
+              <input
+                value={name}
+                autoFocus
+                placeholder="Nome da lista (ex: Acústico sexta)"
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && create()}
+              />
+            </div>
+            <button className="btn btn-primary sheet-submit" onClick={create} disabled={!name.trim()}>
+              Criar lista
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

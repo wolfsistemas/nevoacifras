@@ -10,7 +10,7 @@ import { MAJOR_KEYS, MINOR_KEYS, shiftToKey, transposeChord } from '../lib/trans
 import { attachWakeLock } from '../lib/wakeLock'
 import { createMetronome, tapTempo } from '../lib/metronome'
 import { readCachedSong } from '../lib/songCache'
-import { loadListTone } from '../lib/listTone'
+import { loadListTone, saveListTone } from '../lib/listTone'
 import {
   getSongById,
   getSongBySlug,
@@ -123,7 +123,7 @@ function loadSettings() {
   }
 }
 
-export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, embedded = false }) {
+export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, embedded = false, localToneOnly = false }) {
   const nav = useNavigate()
   const { user } = useAuth()
 
@@ -175,7 +175,8 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
     if (listId && songId) {
       setListTone((prev) => {
         const next = { shift: 0, capo: 0, ...(prev || {}), ...patch }
-        updateListSongTone(listId, songId, next).catch(() => {})
+        if (localToneOnly) saveListTone(listId, songId, next)
+        else updateListSongTone(listId, songId, next).catch(() => {})
         return next
       })
       return
@@ -255,6 +256,7 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
       return
     }
     setListTone(loadListTone(listId, songId))
+    if (localToneOnly) return
     getListWithSongs(listId)
       .then((list) => {
         const item = (list?.items || []).find((it) => it.song?.id === songId)
@@ -265,7 +267,7 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
         })
       })
       .catch(() => {})
-  }, [listId, songId])
+  }, [listId, songId, localToneOnly])
 
   useEffect(() => {
     if (!embedded) return

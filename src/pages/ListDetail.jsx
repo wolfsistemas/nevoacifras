@@ -11,7 +11,9 @@ import {
   moveListSong,
   renameList,
   addSongToList,
-  searchSongsLocal
+  searchSongsLocal,
+  shareList,
+  unshareList
 } from '../lib/store'
 
 function hitKey(h) {
@@ -30,6 +32,9 @@ export default function ListDetail() {
   const [notice, setNotice] = useState('')
   const [addedKeys, setAddedKeys] = useState([])
   const [openSongId, setOpenSongId] = useState(null)
+  const [shareOpen, setShareOpen] = useState(false)
+  const [shareBusy, setShareBusy] = useState(false)
+  const [shareMsg, setShareMsg] = useState('')
   const deb = useRef(null)
   const lastQ = useRef('')
 
@@ -106,6 +111,55 @@ export default function ListDetail() {
     load()
   }
 
+  const shareUrlFor = (token) => {
+    const url = new URL(window.location.href)
+    url.search = ''
+    url.hash = `#/share/${token}`
+    return url.toString()
+  }
+
+  const enableShare = async () => {
+    setShareBusy(true)
+    setShareMsg('')
+    try {
+      const token = await shareList(id)
+      setList((prev) => ({ ...prev, share_token: token, is_public: true }))
+      try {
+        await navigator.clipboard.writeText(shareUrlFor(token))
+        setShareMsg('Link criado e copiado!')
+      } catch {
+        setShareMsg('Link criado. Copie acima.')
+      }
+    } catch (e) {
+      setShareMsg(e?.message || 'Não foi possível compartilhar.')
+    } finally {
+      setShareBusy(false)
+    }
+  }
+
+  const disableShare = async () => {
+    setShareBusy(true)
+    setShareMsg('')
+    try {
+      await unshareList(id)
+      setList((prev) => ({ ...prev, is_public: false }))
+      setShareMsg('Compartilhamento desativado.')
+    } catch (e) {
+      setShareMsg(e?.message || 'Não foi possível desativar.')
+    } finally {
+      setShareBusy(false)
+    }
+  }
+
+  const copyShare = async () => {
+    try {
+      await navigator.clipboard.writeText(shareUrlFor(list.share_token))
+      setShareMsg('Link copiado!')
+    } catch {
+      setShareMsg('Não foi possível copiar. Selecione o link acima.')
+    }
+  }
+
   if (!list) return <div className="page center-page">Carregando...</div>
 
   const items = list.items || []
@@ -126,16 +180,25 @@ export default function ListDetail() {
             {items.length} {items.length === 1 ? 'música' : 'músicas'}
           </p>
         </div>
-        <button
-          className="icon-btn"
-          onClick={() => { setSearchOpen(true); setQ(''); setHits([]); setNotice('') }}
-          aria-label="Adicionar música"
-        >
-          <Icon name="plus" size={18} />
-        </button>
-        <button className="icon-btn" onClick={() => { setName(list.name); setEditing(true) }} aria-label="Renomear lista">
-          <Icon name="edit" size={18} />
-        </button>
+        <div className="row">
+          <button
+            className="icon-btn"
+            onClick={() => { setShareMsg(''); setShareOpen(true) }}
+            aria-label="Compartilhar lista"
+          >
+            <Icon name="share" size={18} />
+          </button>
+          <button
+            className="icon-btn"
+            onClick={() => { setSearchOpen(true); setQ(''); setHits([]); setNotice('') }}
+            aria-label="Adicionar música"
+          >
+            <Icon name="plus" size={18} />
+          </button>
+          <button className="icon-btn" onClick={() => { setName(list.name); setEditing(true) }} aria-label="Renomear lista">
+            <Icon name="edit" size={18} />
+          </button>
+        </div>
       </header>
 
       <div className="stack">
@@ -168,7 +231,7 @@ export default function ListDetail() {
                 ) : null}
               </div>
             </button>
-            <div className="col-actions">
+            <div className="row-actions">
               <button className="icon-btn sm" disabled={idx === 0} onClick={() => move(item, -1)} aria-label="Subir">
                 <Icon name="up" size={16} />
               </button>
@@ -199,6 +262,45 @@ export default function ListDetail() {
             onReplaceSong={setOpenSongId}
             embedded
           />
+        </div>
+      )}
+
+      {shareOpen && (
+        <div className="sheet-backdrop" onClick={() => setShareOpen(false)}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <h3 className="sheet-title">Compartilhar lista</h3>
+            {list.share_token && list.is_public ? (
+              <>
+                <p className="muted small">
+                  Quem entrar com a conta verá esta lista em modo leitura. Você continua sendo o único que edita.
+                </p>
+                <div className="row">
+                  <input
+                    className="grow"
+                    readOnly
+                    value={shareUrlFor(list.share_token)}
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <button className="btn btn-primary sm-btn" onClick={copyShare}>Copiar</button>
+                </div>
+                {shareMsg && <p className="form-notice">{shareMsg}</p>}
+                <button className="btn ghost" onClick={disableShare} disabled={shareBusy}>
+                  {shareBusy ? 'Aguarde...' : 'Desativar link'}
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="muted small">
+                  Crie um link de leitura para enviar a quem quiser. As músicas ficam sincronizadas e só você pode
+                  editar a lista.
+                </p>
+                {shareMsg && <p className="form-notice">{shareMsg}</p>}
+                <button className="btn btn-primary" onClick={enableShare} disabled={shareBusy}>
+                  {shareBusy ? 'Criando...' : 'Criar link de leitura'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
 

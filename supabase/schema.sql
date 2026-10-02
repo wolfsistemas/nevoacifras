@@ -141,17 +141,30 @@ create table if not exists public.lists (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade default auth.uid(),
   name text not null,
+  share_token uuid,
+  is_public boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- Migração idempotente: compartilhamento público somente-leitura
+alter table public.lists add column if not exists share_token uuid;
+alter table public.lists add column if not exists is_public boolean not null default false;
+create unique index if not exists lists_share_token_idx
+  on public.lists (share_token)
+  where share_token is not null;
 
 create index if not exists lists_user_idx on public.lists (user_id);
 
 alter table public.lists enable row level security;
 
+-- dono vê sempre; qualquer usuário autenticado vê listas compartilhadas
 drop policy if exists lists_select on public.lists;
 create policy lists_select on public.lists
-  for select using (auth.uid() = user_id);
+  for select using (
+    auth.uid() = user_id
+    or (is_public and share_token is not null and auth.uid() is not null)
+  );
 
 drop policy if exists lists_insert on public.lists;
 create policy lists_insert on public.lists
@@ -186,11 +199,18 @@ create index if not exists list_songs_list_idx on public.list_songs (list_id);
 
 alter table public.list_songs enable row level security;
 
--- políticas delegam ao dono da lista
+-- políticas delegam ao dono da lista; listas públicas são somente-leitura
 drop policy if exists list_songs_select on public.list_songs;
 create policy list_songs_select on public.list_songs
   for select using (
-    exists (select 1 from public.lists where id = list_id and user_id = auth.uid())
+    exists (
+      select 1 from public.lists l
+      where l.id = list_id
+        and (
+          l.user_id = auth.uid()
+          or (l.is_public and l.share_token is not null and auth.uid() is not null)
+        )
+    )
   );
 
 drop policy if exists list_songs_insert on public.list_songs;

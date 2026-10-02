@@ -136,7 +136,6 @@ export default function Home() {
             placeholder='Busque "me ama", "the scientist" ou o artista'
             aria-label="Buscar cifra"
             autoComplete="off"
-            autoFocus
           />
           <button type="submit" className="btn btn-primary btn-icon" aria-label="Buscar cifra" disabled={busy}>
             {busy ? <span className="mini-spin" /> : <Icon name="arrow" size={18} />}
