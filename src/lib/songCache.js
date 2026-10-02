@@ -1,5 +1,5 @@
 const KEY = 'nevoa_song_cache'
-const MAX = 40
+const MAX = 120
 
 function readAll() {
   try {

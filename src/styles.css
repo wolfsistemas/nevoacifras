@@ -732,6 +732,29 @@ body.song-modal-open .toast { bottom: calc(18px + var(--safe)); }
   .chord-label:hover { background: #eee !important; }
 }
 
+/* ---------- offline ---------- */
+.offline-banner {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  padding: 8px 14px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: var(--bg-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.offline-note {
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--text);
+  font-size: 13px;
+}
+
 /* ---------- desktop ---------- */
 @media (min-width: 780px) {
   .bottom-nav { max-width: 640px; left: 50%; transform: translateX(-50%); border-radius: 16px 16px 0 0; }

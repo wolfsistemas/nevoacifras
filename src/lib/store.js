@@ -3,6 +3,24 @@ import { slugVariants } from './slug'
 import { sanitizeCifraLines } from './cifraSanitize'
 import { readCachedSong, writeCachedSong } from './songCache'
 import { loadListToneMap, saveListTone } from './listTone'
+import {
+  readListCache,
+  readListsCache,
+  removeListCache,
+  saveListCache,
+  saveListsCache
+} from './offline'
+
+// getSession lê a sessão do aparelho (funciona offline), ao contrário de getUser,
+// que valida no servidor. Usado apenas para escolher a chave do cache local.
+async function currentUserId() {
+  try {
+    const { data } = await supabase.auth.getSession()
+    return data?.session?.user?.id || null
+  } catch {
+    return null
+  }
+}
 
 export async function getProfile() {
   const { data: { user } } = await supabase.auth.getUser()
@@ -214,15 +232,24 @@ export function parseSongContent(song) {
 // ------------------------- Listas -------------------------
 
 export async function getLists() {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return []
-  const { data, error } = await supabase
-    .from('lists')
-    .select('*, list_songs(count)')
-    .eq('user_id', user.id)
-    .order('created_at', { ascending: false })
-  if (error) throw error
-  return (data || []).map((l) => ({ ...l, count: l.list_songs?.[0]?.count ?? 0 }))
+  const uid = await currentUserId()
+  try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return []
+    const { data, error } = await supabase
+      .from('lists')
+      .select('*, list_songs(count)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    const lists = (data || []).map((l) => ({ ...l, count: l.list_songs?.[0]?.count ?? 0 }))
+    saveListsCache(uid, lists)
+    return lists
+  } catch (e) {
+    const cached = readListsCache(uid)
+    if (uid && cached.length) return cached
+    throw e
+  }
 }
 
 export async function createList(name) {
@@ -239,9 +266,24 @@ export async function renameList(id, name) {
 export async function deleteList(id) {
   const { error } = await supabase.from('lists').delete().eq('id', id)
   if (error) throw error
+  const uid = await currentUserId()
+  removeListCache(uid, id)
 }
 
 export async function getListWithSongs(id) {
+  const uid = await currentUserId()
+  try {
+    const list = await fetchListWithSongs(id)
+    if (list) saveListCache(uid, list)
+    return list
+  } catch (e) {
+    const cached = readListCache(uid, id)
+    if (uid && cached) return cached
+    throw e
+  }
+}
+
+async function fetchListWithSongs(id) {
   const { data: list, error: e1 } = await supabase
     .from('lists')
     .select('*')

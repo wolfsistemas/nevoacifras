@@ -1,7 +1,9 @@
+import { Component } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { NavLink } from 'react-router-dom'
 import { Icon } from './components/Icons'
 import { useAuth } from './hooks/useAuth'
+import { useOnline } from './hooks/useOnline'
 import Home from './pages/Home'
 import Song from './pages/Song'
 import Lists from './pages/Lists'
@@ -21,25 +23,68 @@ const NAV = [
   { to: '/me', icon: 'user', label: 'Conta' }
 ]
 
+function OfflineBanner() {
+  const online = useOnline()
+  if (online) return null
+  return (
+    <div className="offline-banner" role="status">
+      Você está offline. Mostrando o que já foi salvo no aparelho.
+    </div>
+  )
+}
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="page center-page">
+          <div className="empty-state">
+            <p className="muted">
+              Algo saiu do ar por aqui. Se você estiver sem internet, suas listas salvas
+              continuam disponíveis assim que a tela recarregar.
+            </p>
+            <button className="btn btn-primary" onClick={() => window.location.reload()}>
+              Tentar de novo
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
 function Layout() {
   const loc = useLocation()
   const isSong = loc.pathname.startsWith('/song/')
   return (
     <div className={isSong ? 'app app-song' : 'app'}>
+      <OfflineBanner />
       <main className="main">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/song/:songId/:version?" element={<Song />} />
-          <Route path="/lists" element={<RequireAuth><Lists /></RequireAuth>} />
-          <Route path="/lists/:id" element={<RequireAuth><ListDetail /></RequireAuth>} />
-          <Route path="/share/:token" element={<RequireAuth><SharedList /></RequireAuth>} />
-          <Route path="/favorites" element={<RequireAuth><Favorites /></RequireAuth>} />
-          <Route path="/tuner" element={<Tuner />} />
-          <Route path="/chords" element={<Chords />} />
-          <Route path="/auth" element={<AuthPage />} />
-          <Route path="/me" element={<Profile />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/song/:songId/:version?" element={<Song />} />
+            <Route path="/lists" element={<RequireAuth><Lists /></RequireAuth>} />
+            <Route path="/lists/:id" element={<RequireAuth><ListDetail /></RequireAuth>} />
+            <Route path="/share/:token" element={<RequireAuth><SharedList /></RequireAuth>} />
+            <Route path="/favorites" element={<RequireAuth><Favorites /></RequireAuth>} />
+            <Route path="/tuner" element={<Tuner />} />
+            <Route path="/chords" element={<Chords />} />
+            <Route path="/auth" element={<AuthPage />} />
+            <Route path="/me" element={<Profile />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </ErrorBoundary>
       </main>
       {!isSong && (
         <nav className="bottom-nav">

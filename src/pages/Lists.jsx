@@ -10,8 +10,12 @@ export default function Lists() {
   const [lists, setLists] = useState(null)
   const [name, setName] = useState('')
   const [open, setOpen] = useState(false)
+  const [notice, setNotice] = useState('')
 
-  const load = () => getLists().then(setLists)
+  const load = () =>
+    getLists()
+      .then(setLists)
+      .catch(() => setLists((prev) => (prev ?? [])))
 
   useEffect(() => {
     if (user) load()
@@ -20,7 +24,12 @@ export default function Lists() {
   const create = async () => {
     const n = name.trim()
     if (!n) return
-    await createList(n)
+    try {
+      await createList(n)
+    } catch {
+      setNotice('Sem conexão: não foi possível criar a lista agora.')
+      return
+    }
     setName('')
     setOpen(false)
     load()
@@ -29,7 +38,12 @@ export default function Lists() {
   const remove = async (id, e) => {
     e.stopPropagation()
     if (!window.confirm('Excluir esta lista?')) return
-    await deleteList(id)
+    try {
+      await deleteList(id)
+    } catch {
+      setNotice('Sem conexão: não foi possível excluir a lista agora.')
+      return
+    }
     load()
   }
 
@@ -48,6 +62,12 @@ export default function Lists() {
           <Icon name="plus" size={18} />
         </button>
       </header>
+
+      {notice && (
+        <div className="offline-note" role="alert" onClick={() => setNotice('')}>
+          {notice}
+        </div>
+      )}
 
       <div className="stack">
         {lists === null && <p className="muted">Carregando...</p>}

@@ -38,7 +38,10 @@ export default function ListDetail() {
   const deb = useRef(null)
   const lastQ = useRef('')
 
-  const load = () => getListWithSongs(id).then(setList)
+  const load = () =>
+    getListWithSongs(id)
+      .then(setList)
+      .catch(() => setNotice('Não deu para abrir esta lista agora. Verifique a conexão.'))
 
   useEffect(() => {
     load()
