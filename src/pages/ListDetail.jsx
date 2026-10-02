@@ -4,7 +4,7 @@ import { Icon } from '../components/Icons'
 import SongCard from '../components/SongCard'
 import { SongView } from './Song'
 import { callFetchSong } from '../lib/supabase'
-import { searchItunes, mergeHits } from '../lib/musicSearch'
+import { searchRemoteSongs, mergeHits, resolveCifraHit } from '../lib/musicSearch'
 import {
   getListWithSongs,
   removeSongFromList,
@@ -62,7 +62,7 @@ export default function ListDetail() {
     try {
       const [local, remote] = await Promise.all([
         searchSongsLocal(value, 10).catch(() => []),
-        searchItunes(value, 10).catch(() => [])
+        searchRemoteSongs(value, 10).catch(() => [])
       ])
       if (lastQ.current !== value) return
       setHits(mergeHits(local, remote))
@@ -78,7 +78,13 @@ export default function ListDetail() {
     try {
       let songId = hit.id
       if (!songId) {
-        const res = await callFetchSong({ artist: hit.artist, title: hit.title })
+        const resolved = await resolveCifraHit(hit)
+        const res = await callFetchSong({
+          artist: resolved.slug_artist || resolved.artist,
+          title: resolved.slug_title || resolved.title,
+          slug_artist: resolved.slug_artist,
+          slug_title: resolved.slug_title
+        })
         songId = res?.song?.id
       }
       if (!songId) throw new Error('Não encontramos essa cifra.')

@@ -5,7 +5,7 @@ import SongCard from '../components/SongCard'
 import { useAuth } from '../hooks/useAuth'
 import { callFetchSong } from '../lib/supabase'
 import { listRecentSongs, searchSongsLocal } from '../lib/store'
-import { searchItunes, mergeHits } from '../lib/musicSearch'
+import { searchRemoteSongs, mergeHits, resolveCifraHit } from '../lib/musicSearch'
 
 function hitKey(h) {
   return `${h.slug_artist || ''}|${h.slug_title || ''}|${h.id || ''}|${h.artist}|${h.title}`
@@ -58,9 +58,12 @@ export default function Home() {
         return
       }
       setNotice('Abrindo a cifra no Cifra Club...')
+      const resolved = await resolveCifraHit(hit)
       const res = await callFetchSong({
-        artist: hit.artist,
-        title: hit.title
+        artist: resolved.slug_artist || resolved.artist,
+        title: resolved.slug_title || resolved.title,
+        slug_artist: resolved.slug_artist,
+        slug_title: resolved.slug_title
       })
       const s = res?.song
       if (!s?.id) throw new Error('Não encontramos essa cifra.')
@@ -82,7 +85,7 @@ export default function Home() {
     try {
       const [local, remote] = await Promise.all([
         searchSongsLocal(value, 10).catch(() => []),
-        searchItunes(value, 10).catch(() => [])
+        searchRemoteSongs(value, 10).catch(() => [])
       ])
       if (lastQ.current !== value) return
       const list = mergeHits(local, remote)
