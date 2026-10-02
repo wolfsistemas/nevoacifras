@@ -72,3 +72,18 @@ export function shiftToKey(fromName, toName, capo = 0) {
   if (delta > 6) delta -= 12
   return delta
 }
+
+export function mod12(n) {
+  return (((n % 12) + 12) % 12)
+}
+
+// Diferença mais curta (em semitons, entre -6 e +6) para sair de "from" e chegar em "to".
+export function signedDelta(delta) {
+  const m = mod12(delta)
+  return m > 6 ? m - 12 : m
+}
+
+// Mantém o número do shift na faixa -6..+6 (mesmo som, mais fácil de mostrar).
+export function normalizeShift(shift) {
+  return signedDelta(shift)
+}

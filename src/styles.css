@@ -423,6 +423,7 @@ a:hover { text-decoration: underline; }
   margin: 8px 0 16px;
 }
 .key-btn {
+  position: relative;
   padding: 10px 0;
   border-radius: 10px;
   background: var(--bg-3);
@@ -431,6 +432,28 @@ a:hover { text-decoration: underline; }
   font-size: 13px;
 }
 .key-btn.on { background: var(--accent); color: #fff; border-color: transparent; }
+.key-btn:disabled { opacity: 0.5; }
+.key-btn.origin { border-color: var(--lime); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lime) 55%, transparent); }
+.key-btn.on.origin { border-color: var(--lime); }
+.key-btn.origin::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--lime);
+}
+.key-legend { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
+.key-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lime);
+  display: inline-block;
+  flex: 0 0 auto;
+}
 
 .song-head-nav { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 

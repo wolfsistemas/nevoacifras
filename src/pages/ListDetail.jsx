@@ -6,6 +6,8 @@ import ListChat from '../components/ListChat'
 import { SongView } from './Song'
 import { callFetchSong } from '../lib/supabase'
 import { searchRemoteSongs, mergeHits, resolveCifraHit } from '../lib/musicSearch'
+import { MAJOR_KEYS, MINOR_KEYS, keySemitone, normalizeShift, signedDelta } from '../lib/transpose'
+import { detectKey } from '../lib/keyDetect'
 import {
   getListWithSongs,
   removeSongFromList,
@@ -14,7 +16,10 @@ import {
   addSongToList,
   searchSongsLocal,
   shareList,
-  unshareList
+  unshareList,
+  getSongsKeyInfo,
+  parseSongContent,
+  updateListSongTone
 } from '../lib/store'
 
 function hitKey(h) {
@@ -36,6 +41,10 @@ export default function ListDetail() {
   const [shareOpen, setShareOpen] = useState(false)
   const [shareBusy, setShareBusy] = useState(false)
   const [shareMsg, setShareMsg] = useState('')
+  const [toneOpen, setToneOpen] = useState(false)
+  const [toneBusy, setToneBusy] = useState(false)
+  const [toneNotice, setToneNotice] = useState('')
+  const [songKeys, setSongKeys] = useState({})
   const deb = useRef(null)
   const lastQ = useRef('')
 
@@ -176,6 +185,67 @@ export default function ListDetail() {
   const readOnly = !!list.is_readonly
   const chatToken = list.share_token || list.shared_from_token || null
 
+  const openStandardize = async () => {
+    setToneNotice('')
+    setSongKeys({})
+    setToneOpen(true)
+    setToneBusy(true)
+    try {
+      const ids = items.map((it) => it.song?.id).filter(Boolean)
+      const info = await getSongsKeyInfo(ids)
+      const map = {}
+      for (const it of items) {
+        const sid = it.song?.id
+        if (!sid) continue
+        let key = info[sid] ? detectKey(parseSongContent(info[sid])) : null
+        if (!key) {
+          const semi = keySemitone(it.song?.tone_root)
+          if (semi != null) key = { root: semi, mode: 'major' }
+        }
+        if (key) map[sid] = key
+      }
+      setSongKeys(map)
+      if (!Object.keys(map).length) setToneNotice('Não conseguimos analisar as cifras desta lista.')
+    } catch (e) {
+      setToneNotice(e?.message || 'Não foi possível analisar as cifras agora.')
+    } finally {
+      setToneBusy(false)
+    }
+  }
+
+  const applyStandardTone = async (targetKeyName) => {
+    const targetSemi = keySemitone(targetKeyName)
+    if (targetSemi == null) return
+    const targetMode = /m$/.test(targetKeyName) ? 'minor' : 'major'
+    setToneBusy(true)
+    setToneNotice('')
+    try {
+      const updates = []
+      for (const it of items) {
+        const sid = it.song?.id
+        const key = sid ? songKeys[sid] : null
+        if (!key) continue
+        const desired =
+          key.mode === targetMode
+            ? targetSemi
+            : targetMode === 'minor'
+              ? targetSemi + 3
+              : targetSemi - 3
+        const capo = Number(it.capo) || 0
+        const shift = normalizeShift(signedDelta(desired - key.root) + capo)
+        updates.push(updateListSongTone(id, sid, { shift, capo }))
+      }
+      await Promise.all(updates)
+      await load()
+      setToneOpen(false)
+      setNotice(`Cifras padronizadas em ${targetKeyName}.`)
+    } catch (e) {
+      setToneNotice(e?.message || 'Não foi possível padronizar o tom.')
+    } finally {
+      setToneBusy(false)
+    }
+  }
+
   return (
     <div className="page">
       <header className="page-head row-space">
@@ -199,7 +269,7 @@ export default function ListDetail() {
           )}
         </div>
         {!readOnly && (
-          <div className="row">
+          <div className="row wrap">
             <button
               className="icon-btn"
               onClick={() => { setShareMsg(''); setShareOpen(true) }}
@@ -214,12 +284,22 @@ export default function ListDetail() {
             >
               <Icon name="plus" size={18} />
             </button>
+            <button
+              className="icon-btn"
+              onClick={openStandardize}
+              aria-label="Padronizar o tom das cifras"
+              title="Padronizar o tom das cifras"
+            >
+              <Icon name="sliders" size={18} />
+            </button>
             <button className="icon-btn" onClick={() => { setName(list.name); setEditing(true) }} aria-label="Renomear lista">
               <Icon name="edit" size={18} />
             </button>
           </div>
         )}
       </header>
+
+      {notice && <p className="form-notice">{notice}</p>}
 
       <div className="stack">
         {items.length === 0 && (
@@ -338,6 +418,46 @@ export default function ListDetail() {
                 </button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {toneOpen && (
+        <div className="sheet-backdrop" onClick={() => { if (!toneBusy) setToneOpen(false) }}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <h3 className="sheet-title">Padronizar o tom</h3>
+            <p className="muted small">
+              Escolha o tom da lista. As músicas maiores vão para o tom escolhido e as menores para o relativo
+              (ex.: E vai para C#m). O capotraste de cada cifra é mantido.
+            </p>
+            {toneBusy && !Object.keys(songKeys).length ? (
+              <p className="muted small">Analisando as cifras...</p>
+            ) : Object.keys(songKeys).length ? (
+              <>
+                <p className="muted small">Maior</p>
+                <div className="key-grid">
+                  {MAJOR_KEYS.map((k) => (
+                    <button key={k} className="key-btn" disabled={toneBusy} onClick={() => applyStandardTone(k)}>
+                      {k}
+                    </button>
+                  ))}
+                </div>
+                <p className="muted small">Menor</p>
+                <div className="key-grid">
+                  {MINOR_KEYS.map((k) => (
+                    <button key={k} className="key-btn" disabled={toneBusy} onClick={() => applyStandardTone(k)}>
+                      {k}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="muted small">{toneNotice || 'Não conseguimos analisar as cifras desta lista.'}</p>
+            )}
+            {toneNotice && Object.keys(songKeys).length > 0 && <p className="form-notice">{toneNotice}</p>}
+            <button className="btn ghost" onClick={() => setToneOpen(false)} disabled={toneBusy}>
+              Cancelar
+            </button>
           </div>
         </div>
       )}

@@ -571,6 +571,8 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
   const songHasTabs = hasTabs(lines)
   const visibleLines = hideTabs ? lines.filter((l) => l.kind !== 'tab') : lines
   const currentKey = toneLabel || song.tone_root || ''
+  const originalKey = song.tone_root || ''
+  const originalIsMinor = /m$/.test(originalKey)
 
   return (
     <div id="presentation-root" className={`song-page${embedded ? ' song-page-embed' : ''}`} style={{ fontSize: `${fontSize}px` }}>
@@ -809,7 +811,11 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
             <p className="muted small">Maior</p>
             <div className="key-grid">
               {MAJOR_KEYS.map((k) => (
-                <button key={k} className={currentKey === k ? 'key-btn on' : 'key-btn'} onClick={() => pickKey(k)}>
+                <button
+                  key={k}
+                  className={`key-btn${currentKey === k ? ' on' : ''}${!originalIsMinor && originalKey === k ? ' origin' : ''}`}
+                  onClick={() => pickKey(k)}
+                >
                   {k}
                 </button>
               ))}
@@ -817,11 +823,20 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
             <p className="muted small">Menor</p>
             <div className="key-grid">
               {MINOR_KEYS.map((k) => (
-                <button key={k} className={currentKey === k ? 'key-btn on' : 'key-btn'} onClick={() => pickKey(k)}>
+                <button
+                  key={k}
+                  className={`key-btn${currentKey === k ? ' on' : ''}${originalIsMinor && originalKey === k ? ' origin' : ''}`}
+                  onClick={() => pickKey(k)}
+                >
                   {k}
                 </button>
               ))}
             </div>
+            {originalKey && (
+              <p className="muted small key-legend">
+                <i className="key-dot" /> Tom original: <b>{originalKey}</b>
+              </p>
+            )}
           </div>
         </div>
       )}

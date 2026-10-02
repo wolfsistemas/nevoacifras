@@ -229,6 +229,20 @@ export function parseSongContent(song) {
   return sanitizeCifraLines(Array.isArray(lines) ? lines : [])
 }
 
+// Busca tom e conteúdo (para detectar maior/menor) de várias músicas de uma vez.
+export async function getSongsKeyInfo(ids) {
+  const unique = [...new Set((ids || []).filter(Boolean))]
+  if (!unique.length) return {}
+  const { data, error } = await supabase
+    .from('songs')
+    .select('id, tone_root, content')
+    .in('id', unique)
+  if (error) throw error
+  const map = {}
+  for (const row of data || []) map[row.id] = row
+  return map
+}
+
 // ------------------------- Listas -------------------------
 
 export async function getLists() {
