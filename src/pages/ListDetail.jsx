@@ -45,6 +45,8 @@ export default function ListDetail() {
   const [toneBusy, setToneBusy] = useState(false)
   const [toneNotice, setToneNotice] = useState('')
   const [songKeys, setSongKeys] = useState({})
+  const [capoOpen, setCapoOpen] = useState(false)
+  const [capoBusy, setCapoBusy] = useState(false)
   const deb = useRef(null)
   const lastQ = useRef('')
 
@@ -184,6 +186,7 @@ export default function ListDetail() {
   const items = list.items || []
   const readOnly = !!list.is_readonly
   const chatToken = list.share_token || list.shared_from_token || null
+  const capoSongs = items.filter((it) => (Number(it.capo) || 0) > 0)
 
   const openStandardize = async () => {
     setToneNotice('')
@@ -246,6 +249,30 @@ export default function ListDetail() {
     }
   }
 
+  const removeAllCapos = async () => {
+    setCapoBusy(true)
+    setNotice('')
+    try {
+      const targets = capoSongs
+      await Promise.all(
+        targets.map((it) =>
+          updateListSongTone(id, it.song.id, { shift: Number(it.shift) || 0, capo: 0 })
+        )
+      )
+      await load()
+      setCapoOpen(false)
+      setNotice(
+        targets.length
+          ? `Capotraste removido de ${targets.length} ${targets.length === 1 ? 'música' : 'músicas'}.`
+          : 'Nenhuma música tinha capotraste.'
+      )
+    } catch (e) {
+      setNotice(e?.message || 'Não foi possível remover o capotraste.')
+    } finally {
+      setCapoBusy(false)
+    }
+  }
+
   return (
     <div className="page">
       <header className="page-head row-space">
@@ -291,6 +318,14 @@ export default function ListDetail() {
               title="Padronizar o tom das cifras"
             >
               <Icon name="sliders" size={18} />
+            </button>
+            <button
+              className="icon-btn"
+              onClick={() => { setNotice(''); setCapoOpen(true) }}
+              aria-label="Remover o capotraste de todas"
+              title="Remover o capotraste de todas"
+            >
+              <Icon name="capo" size={18} />
             </button>
             <button className="icon-btn" onClick={() => { setName(list.name); setEditing(true) }} aria-label="Renomear lista">
               <Icon name="edit" size={18} />
@@ -458,6 +493,35 @@ export default function ListDetail() {
             <button className="btn ghost" onClick={() => setToneOpen(false)} disabled={toneBusy}>
               Cancelar
             </button>
+          </div>
+        </div>
+      )}
+
+      {capoOpen && (
+        <div className="sheet-backdrop" onClick={() => { if (!capoBusy) setCapoOpen(false) }}>
+          <div className="sheet" onClick={(e) => e.stopPropagation()}>
+            <h3 className="sheet-title">Remover capotraste</h3>
+            {capoSongs.length > 0 ? (
+              <p className="muted small">
+                Vou tirar o capotraste de {capoSongs.length}{' '}
+                {capoSongs.length === 1 ? 'música' : 'músicas'}. O tom (som) de cada uma continua o mesmo —
+                elas só passam a ser tocadas sem capotraste.
+              </p>
+            ) : (
+              <p className="muted small">Nenhuma música desta lista está com capotraste.</p>
+            )}
+            <div className="sheet-btns">
+              <button
+                className="btn btn-primary"
+                onClick={removeAllCapos}
+                disabled={capoBusy || capoSongs.length === 0}
+              >
+                {capoBusy ? 'Removendo...' : 'Remover capotraste'}
+              </button>
+              <button className="btn ghost" onClick={() => setCapoOpen(false)} disabled={capoBusy}>
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}

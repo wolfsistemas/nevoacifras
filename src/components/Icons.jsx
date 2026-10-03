@@ -36,7 +36,8 @@ const PATHS = {
   chat: 'M21 11.5a8 8 0 0 1-8 8H8l-4 3v-5.4A8 8 0 0 1 13 3.5a8 8 0 0 1 8 8Z',
   send: 'M22 2 11 13M22 2l-7 20-4-11-11-4 22-7Z',
   bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 8-3 8h18s-3-1-3-8M10.3 21a1.9 1.9 0 0 0 3.4 0',
-  sliders: 'M4 21v-6M4 11V3M12 21v-9M12 8V3M20 21v-4M20 13V3M1.5 15h5M9.5 8h5M17.5 17h5'
+  sliders: 'M4 21v-6M4 11V3M12 21v-9M12 8V3M20 21v-4M20 13V3M1.5 15h5M9.5 8h5M17.5 17h5',
+  capo: 'M5 3v18M9 3v18M13 3v18M17 3v18M3 6h18v3H3z'
 }
 
 export function Icon({ name, size = 20, className = '' }) {

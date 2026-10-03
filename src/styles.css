@@ -631,6 +631,7 @@ body.song-modal-open .toast { bottom: calc(18px + var(--safe)); }
   animation: slideUp 0.18s ease;
 }
 .sheet-title { margin: 0 0 14px; }
+.sheet-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
 .sheet-close { position: absolute; right: 14px; top: 14px; }
 .sheet-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
 .sheet-row {

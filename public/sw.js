@@ -1,5 +1,5 @@
-const SHELL = 'nevoa-shell-v5'
-const API = 'nevoa-api-v5'
+const SHELL = 'nevoa-shell-v6'
+const API = 'nevoa-api-v6'
 const MAX_API = 500
 const PRECACHE = ['./', './index.html', './manifest.json', './logo.png', './favicon.svg']
 
