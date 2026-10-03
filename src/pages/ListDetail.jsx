@@ -203,7 +203,7 @@ export default function ListDetail() {
         let key = info[sid] ? detectKey(parseSongContent(info[sid])) : null
         if (!key) {
           const semi = keySemitone(it.song?.tone_root)
-          if (semi != null) key = { root: semi, mode: 'major' }
+          if (semi != null) key = { root: semi, mode: /m$/.test(it.song.tone_root) ? 'minor' : 'major' }
         }
         if (key) map[sid] = key
       }

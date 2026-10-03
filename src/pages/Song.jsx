@@ -8,6 +8,7 @@ import { callFetchSong } from '../lib/supabase'
 import { hasTabs } from '../lib/cifraSanitize'
 import { simplifyCifraLines } from '../lib/simplifyCifra'
 import { MAJOR_KEYS, MINOR_KEYS, shiftToKey, transposeChord } from '../lib/transpose'
+import { detectKeyName } from '../lib/keyDetect'
 import { attachWakeLock } from '../lib/wakeLock'
 import { createMetronome, tapTempo } from '../lib/metronome'
 import { readCachedSong } from '../lib/songCache'
@@ -160,6 +161,13 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
   const speedIdx = Math.max(0, Math.min(SPEEDS.length - 1, Number(speed) || 0))
   const scaleIdx = clampScale(scale)
   const eff = shift - capo
+  // Tom de referência da cifra: o tom real do conteúdo (detectado), com o
+  // metadado `tone_root` só como reserva. É a mesma base usada ao padronizar a
+  // lista, então o tom exibido sempre acompanha o tom tocado.
+  const baseKey = useMemo(() => {
+    if (!song) return null
+    return detectKeyName(parseSongContent(song)) || song.tone_root || null
+  }, [song])
   const fontSize = SIZES[scaleIdx]
   const pxSpeed = SPEEDS[speedIdx]
 
@@ -432,8 +440,8 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
   const goNeighbor = (id) => goToSong(id)
 
   const pickKey = (keyName) => {
-    if (!song?.tone_root) return
-    persistTone({ shift: shiftToKey(song.tone_root, keyName, capo) })
+    if (!baseKey) return
+    persistTone({ shift: shiftToKey(baseKey, keyName, capo) })
     setToneOpen(false)
   }
 
@@ -566,12 +574,12 @@ export function SongView({ songId, listId, playlistIds, onBack, onReplaceSong, e
   }
 
   const version = song.version === 'simplificada' ? 'simplificada' : 'original'
-  const toneLabel = song.tone_root ? transposeChord(song.tone_root, eff) : null
+  const toneLabel = baseKey ? transposeChord(baseKey, eff) : null
   const lines = parseSongContent(song)
   const songHasTabs = hasTabs(lines)
   const visibleLines = hideTabs ? lines.filter((l) => l.kind !== 'tab') : lines
-  const currentKey = toneLabel || song.tone_root || ''
-  const originalKey = song.tone_root || ''
+  const currentKey = toneLabel || baseKey || ''
+  const originalKey = baseKey || ''
   const originalIsMinor = /m$/.test(originalKey)
 
   return (

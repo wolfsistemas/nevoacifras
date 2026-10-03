@@ -1,4 +1,4 @@
-import { parseChord, mod12 } from './transpose'
+import { parseChord, mod12, noteName } from './transpose'
 
 // Escalas (graus em semitons a partir da tônica) e a qualidade esperada de cada grau.
 const MAJOR_STEPS = [0, 2, 4, 5, 7, 9, 11]
@@ -60,4 +60,11 @@ export function detectKey(lines) {
     }
   }
   return best
+}
+
+// Nome do tom detectado (ex.: "G", "Am"), ou null se não der para detectar.
+export function detectKeyName(lines) {
+  const k = detectKey(lines)
+  if (!k) return null
+  return noteName(k.root) + (k.mode === 'minor' ? 'm' : '')
 }
